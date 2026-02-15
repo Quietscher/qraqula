@@ -66,11 +66,15 @@ func (m *Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		return *m, tea.Quit
 
-	case key.Matches(msg, keys.Execute):
+	case key.Matches(msg, keys.Execute) && m.focus == PanelResults:
 		return m.executeQuery()
 
 	case key.Matches(msg, keys.Tab):
 		m.setFocus(nextPanel(m.focus))
+		return *m, nil
+
+	case key.Matches(msg, keys.ShiftTab):
+		m.setFocus(prevPanel(m.focus))
 		return *m, nil
 
 	case key.Matches(msg, keys.FocusUp):

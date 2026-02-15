@@ -2,6 +2,7 @@ package statusbar
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -12,6 +13,8 @@ var (
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	keyStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
 type Model struct {
@@ -54,7 +57,27 @@ func (m *Model) Clear() {
 }
 
 func (m Model) View() string {
-	return " " + m.text
+	hints := keybindingHints()
+	gap := m.width - lipgloss.Width(m.text) - lipgloss.Width(hints) - 2 // 2 for padding
+	if gap < 1 {
+		gap = 1
+	}
+	return " " + m.text + strings.Repeat(" ", gap) + hints
+}
+
+func keybindingHints() string {
+	bindings := []struct{ key, label string }{
+		{"enter", "execute"},
+		{"tab", "next"},
+		{"⇧tab", "prev"},
+		{"^c", "abort"},
+		{"^q", "quit"},
+	}
+	parts := make([]string, len(bindings))
+	for i, b := range bindings {
+		parts[i] = keyStyle.Render(b.key) + " " + labelStyle.Render(b.label)
+	}
+	return strings.Join(parts, "  ")
 }
 
 func formatDuration(d time.Duration) string {

@@ -9,6 +9,7 @@ type keyMap struct {
 	Abort      key.Binding
 	Quit       key.Binding
 	Tab        key.Binding
+	ShiftTab   key.Binding
 	FocusUp    key.Binding
 	FocusDown  key.Binding
 	FocusLeft  key.Binding
@@ -17,8 +18,8 @@ type keyMap struct {
 
 var keys = keyMap{
 	Execute: key.NewBinding(
-		key.WithKeys("ctrl+enter"),
-		key.WithHelp("ctrl+enter", "execute query"),
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "execute query"),
 	),
 	Abort: key.NewBinding(
 		key.WithKeys("ctrl+c"),
@@ -31,6 +32,10 @@ var keys = keyMap{
 	Tab: key.NewBinding(
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "next panel"),
+	),
+	ShiftTab: key.NewBinding(
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "previous panel"),
 	),
 	FocusUp: key.NewBinding(
 		key.WithKeys("ctrl+k"),

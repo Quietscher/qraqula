@@ -29,9 +29,12 @@ type Model struct {
 }
 
 func NewModel() Model {
+	ed := editor.New()
+	ed.Focus()
+
 	return Model{
 		endpoint:  endpoint.New(),
-		editor:    editor.New(),
+		editor:    ed,
 		variables: variables.New(),
 		results:   results.New(80, 20),
 		statusbar: statusbar.New(),

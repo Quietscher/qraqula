@@ -30,6 +30,11 @@ func nextPanel(p Panel) Panel {
 	return (p + 1) % panelCount
 }
 
+// prevPanel cycles focus backward.
+func prevPanel(p Panel) Panel {
+	return (p - 1 + panelCount) % panelCount
+}
+
 // navigatePanel moves focus directionally.
 // Layout:
 //
