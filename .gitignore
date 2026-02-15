@@ -1,5 +1,5 @@
 # Binaries
-qla
+/qla
 *.exe
 *.exe~
 *.dll

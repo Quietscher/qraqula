@@ -10,6 +10,11 @@ import (
 	"github.com/qraqula/qla/internal/graphql"
 )
 
+func updateModel(m Model, msg tea.Msg) (Model, tea.Cmd) {
+	tm, cmd := m.Update(msg)
+	return tm.(Model), cmd
+}
+
 func TestNewModel(t *testing.T) {
 	m := NewModel()
 	if m.focus != PanelEditor {
@@ -23,10 +28,10 @@ func TestNewModel(t *testing.T) {
 func TestFocusCycle(t *testing.T) {
 	m := NewModel()
 	// Simulate window size first
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	initial := m.focus
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m, _ = updateModel(m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus == initial {
 		t.Error("expected focus to change after Tab")
 	}
@@ -34,9 +39,9 @@ func TestFocusCycle(t *testing.T) {
 
 func TestQueryResult(t *testing.T) {
 	m := NewModel()
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
-	m, _ = m.Update(QueryResultMsg{
+	m, _ = updateModel(m, QueryResultMsg{
 		Result: &graphql.Result{
 			StatusCode: 200,
 			Duration:   142 * time.Millisecond,
@@ -55,9 +60,9 @@ func TestQueryResult(t *testing.T) {
 
 func TestQueryError(t *testing.T) {
 	m := NewModel()
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
-	m, _ = m.Update(QueryErrorMsg{Err: fmt.Errorf("connection refused")})
+	m, _ = updateModel(m, QueryErrorMsg{Err: fmt.Errorf("connection refused")})
 	if m.querying {
 		t.Error("expected querying to be false after error")
 	}
