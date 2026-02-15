@@ -1,0 +1,40 @@
+# Binaries
+qla
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build output
+/dist/
+/bin/
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+*.prof
+
+# Go module cache (should not be committed)
+/vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+
+# Agent plans / docs
+docs/plans/
+
+# Debug
+__debug_bin*
