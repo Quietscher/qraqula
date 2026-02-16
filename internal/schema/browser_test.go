@@ -183,8 +183,6 @@ func TestBrowserCursorMovement(t *testing.T) {
 
 	// Root has Query (0) and Mutation (1).
 	// cursor starts at 0.
-	view0 := b.View()
-
 	// Move down with j
 	b = updateBrowser(b, keyPress("j"))
 	// Now cursor=1. Press enter → drill into Mutation
@@ -228,7 +226,6 @@ func TestBrowserCursorMovement(t *testing.T) {
 		t.Error("expected cursor to clamp at bottom, drill into Mutation")
 	}
 
-	_ = view0
 }
 
 func TestBrowserCursorWithArrowKeys(t *testing.T) {
@@ -291,12 +288,11 @@ func TestBrowserDeprecatedField(t *testing.T) {
 	b = updateBrowser(b, keyPress("enter")) // cursor=0 → first item
 
 	view := b.View()
-	// If we drilled into User, it should show deprecated field
-	if strings.Contains(view, "oldName") {
-		// Good, we can check for deprecation note
-		if !strings.Contains(view, "deprecated") {
-			t.Error("expected deprecated note for oldName field")
-		}
+	if !strings.Contains(view, "oldName") {
+		t.Error("expected User page to show deprecated 'oldName' field")
+	}
+	if !strings.Contains(view, "deprecated") {
+		t.Error("expected deprecated note for oldName field")
 	}
 }
 
