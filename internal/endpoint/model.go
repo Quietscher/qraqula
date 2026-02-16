@@ -1,9 +1,9 @@
 package endpoint
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -40,7 +40,7 @@ func (m Model) Focused() bool {
 
 func (m *Model) SetWidth(w int) {
 	m.width = w
-	m.input.Width = w - 12 // account for label
+	m.input.SetWidth(w - 12) // account for label
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
