@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/qraqula/qla/internal/graphql"
+	"github.com/qraqula/qla/internal/schema"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -19,7 +20,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layoutPanels()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
 	case QueryResultMsg:
@@ -47,6 +48,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.results.SetContent("Query aborted")
 		m.statusbar.SetAborted()
 		return m, nil
+
+	case SchemaFetchedMsg:
+		m.browser.SetSchema(msg.Schema)
+		m.statusbar.SetSchemaLoaded(len(msg.Schema.Types))
+		return m, nil
+
+	case SchemaFetchErrorMsg:
+		m.statusbar.SetError("Schema fetch failed: " + msg.Err.Error())
+		return m, nil
 	}
 
 	// Forward to focused panel
@@ -54,7 +64,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Quit):
 		return *m, tea.Quit
@@ -91,11 +101,22 @@ func (m *Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, keys.FocusRight):
 		m.setFocus(navigatePanel(m.focus, "right"))
 		return *m, nil
+
+	case key.Matches(msg, keys.ToggleDocs):
+		if m.rightPanelMode == modeResults {
+			m.rightPanelMode = modeSchema
+		} else {
+			m.rightPanelMode = modeResults
+		}
+		return *m, nil
+
+	case key.Matches(msg, keys.RefreshSchema):
+		return m.fetchSchema()
 	}
 
 	// Forward to focused panel
 	var cmds []tea.Cmd
-	cmds = append(cmds, m.updateFocused(tea.Msg(msg))...)
+	cmds = append(cmds, m.updateFocused(msg)...)
 	return *m, tea.Batch(cmds...)
 }
 
@@ -146,6 +167,24 @@ func (m *Model) executeQuery() (Model, tea.Cmd) {
 	return *m, cmd
 }
 
+func (m *Model) fetchSchema() (Model, tea.Cmd) {
+	ep := m.endpoint.Value()
+	if ep == "" {
+		m.statusbar.SetError("No endpoint configured")
+		return *m, nil
+	}
+	m.statusbar.SetSchemaLoading()
+	client := m.gqlClient
+	cmd := func() tea.Msg {
+		s, err := schema.FetchSchema(context.Background(), client, ep)
+		if err != nil {
+			return SchemaFetchErrorMsg{Err: err}
+		}
+		return SchemaFetchedMsg{Schema: s}
+	}
+	return *m, cmd
+}
+
 func (m *Model) setFocus(p Panel) {
 	// Blur current
 	switch m.focus {
@@ -181,7 +220,11 @@ func (m *Model) updateFocused(msg tea.Msg) []tea.Cmd {
 	case PanelVariables:
 		m.variables, cmd = m.variables.Update(msg)
 	case PanelResults:
-		m.results, cmd = m.results.Update(msg)
+		if m.rightPanelMode == modeSchema {
+			m.browser, cmd = m.browser.Update(msg)
+		} else {
+			m.results, cmd = m.results.Update(msg)
+		}
 	}
 	if cmd != nil {
 		cmds = append(cmds, cmd)
@@ -203,5 +246,6 @@ func (m *Model) layoutPanels() {
 	m.editor.SetSize(leftWidth, editorHeight)
 	m.variables.SetSize(leftWidth, varsHeight)
 	m.results.SetSize(rightWidth, contentHeight)
+	m.browser.SetSize(rightWidth, contentHeight)
 	m.statusbar.SetWidth(m.width)
 }
