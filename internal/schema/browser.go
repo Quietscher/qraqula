@@ -39,7 +39,7 @@ var (
 	dimStyle        = lipgloss.NewStyle().Faint(true)
 	breadcrumbStyle = lipgloss.NewStyle().Faint(true)
 	badgeStyle      = lipgloss.NewStyle().Faint(true)
-	titleStyle_b    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
+	browserTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 )
 
 // NewBrowser returns a Browser with no schema loaded.
@@ -112,7 +112,7 @@ func (b Browser) View() string {
 	}
 
 	// Title
-	sb.WriteString(titleStyle_b.Render(p.title))
+	sb.WriteString(browserTitleStyle.Render(p.title))
 	sb.WriteString("\n")
 
 	// How many lines are used by header (breadcrumbs + title + blank line)
@@ -127,9 +127,6 @@ func (b Browser) View() string {
 	if visibleHeight < 1 {
 		visibleHeight = 1
 	}
-
-	// Adjust scroll offset
-	b.adjustOffset(visibleHeight)
 
 	// Render visible items
 	end := b.offset + visibleHeight
@@ -191,13 +188,27 @@ func (b *Browser) cursorDown() {
 	p := b.currentPage()
 	if b.cursor < len(p.items)-1 {
 		b.cursor++
+		b.adjustOffset(b.visibleHeight())
 	}
 }
 
 func (b *Browser) cursorUp() {
 	if b.cursor > 0 {
 		b.cursor--
+		b.adjustOffset(b.visibleHeight())
 	}
+}
+
+func (b *Browser) visibleHeight() int {
+	headerLines := 2
+	if len(b.stack) > 1 {
+		headerLines = 3
+	}
+	vh := b.height - headerLines
+	if vh < 1 {
+		vh = 1
+	}
+	return vh
 }
 
 func (b *Browser) drillIn() {
