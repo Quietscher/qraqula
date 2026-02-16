@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/qraqula/qla/internal/graphql"
 )
 
@@ -31,7 +31,7 @@ func TestFocusCycle(t *testing.T) {
 	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	initial := m.focus
-	m, _ = updateModel(m, tea.KeyMsg{Type: tea.KeyTab})
+	m, _ = updateModel(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if m.focus == initial {
 		t.Error("expected focus to change after Tab")
 	}
@@ -52,7 +52,7 @@ func TestQueryResult(t *testing.T) {
 	if m.querying {
 		t.Error("expected querying to be false after result")
 	}
-	view := m.View()
+	view := m.renderView()
 	if !strings.Contains(view, "200") {
 		t.Errorf("expected status code in view after result")
 	}

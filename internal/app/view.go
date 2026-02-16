@@ -1,7 +1,8 @@
 package app
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -18,7 +19,13 @@ var (
 		Foreground(lipgloss.Color("245"))
 )
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	v := tea.NewView(m.renderView())
+	v.AltScreen = true
+	return v
+}
+
+func (m Model) renderView() string {
 	// Endpoint bar
 	epStyle := endpointStyle.Width(m.width - 2)
 	if m.focus == PanelEndpoint {
@@ -37,7 +44,13 @@ func (m Model) View() string {
 
 	// Right column
 	resultsStyle := m.panelStyle(PanelResults)
-	rightCol := resultsStyle.Render(m.results.View())
+	var rightContent string
+	if m.rightPanelMode == modeSchema {
+		rightContent = m.browser.View()
+	} else {
+		rightContent = m.results.View()
+	}
+	rightCol := resultsStyle.Render(rightContent)
 
 	// Main content
 	content := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)

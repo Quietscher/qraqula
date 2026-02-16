@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -52,6 +52,14 @@ func (m *Model) SetAborted() {
 	m.text = warnStyle.Render("Query aborted")
 }
 
+func (m *Model) SetSchemaLoading() {
+	m.text = barStyle.Render("Fetching schema...")
+}
+
+func (m *Model) SetSchemaLoaded(typeCount int) {
+	m.text = okStyle.Render(fmt.Sprintf("Schema loaded (%d types)", typeCount))
+}
+
 func (m *Model) Clear() {
 	m.text = barStyle.Render("Ready")
 }
@@ -67,9 +75,11 @@ func (m Model) View() string {
 
 func keybindingHints() string {
 	bindings := []struct{ key, label string }{
-		{"alt+↵", "execute"},
+		{"ctrl+↵", "execute"},
 		{"tab", "next"},
 		{"⇧tab", "prev"},
+		{"^d", "docs"},
+		{"^r", "schema"},
 		{"^c", "abort"},
 		{"^q", "quit"},
 	}

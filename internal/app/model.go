@@ -3,13 +3,21 @@ package app
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/qraqula/qla/internal/editor"
 	"github.com/qraqula/qla/internal/endpoint"
 	"github.com/qraqula/qla/internal/graphql"
 	"github.com/qraqula/qla/internal/results"
+	"github.com/qraqula/qla/internal/schema"
 	"github.com/qraqula/qla/internal/statusbar"
 	"github.com/qraqula/qla/internal/variables"
+)
+
+type rightPanelMode int
+
+const (
+	modeResults rightPanelMode = iota
+	modeSchema
 )
 
 type Model struct {
@@ -19,8 +27,11 @@ type Model struct {
 	results   results.Model
 	statusbar statusbar.Model
 
-	gqlClient   *graphql.Client
-	cancelQuery context.CancelFunc
+	browser   schema.Browser
+	gqlClient *graphql.Client
+
+	cancelQuery    context.CancelFunc
+	rightPanelMode rightPanelMode
 
 	focus    Panel
 	querying bool
@@ -38,6 +49,7 @@ func NewModel() Model {
 		variables: variables.New(),
 		results:   results.New(80, 20),
 		statusbar: statusbar.New(),
+		browser:   schema.NewBrowser(),
 		gqlClient: graphql.NewClient(),
 		focus:     PanelEditor,
 	}

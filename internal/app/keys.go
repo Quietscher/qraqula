@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/charmbracelet/bubbles/key"
+	"charm.land/bubbles/v2/key"
 )
 
 type keyMap struct {
@@ -12,14 +12,16 @@ type keyMap struct {
 	ShiftTab   key.Binding
 	FocusUp    key.Binding
 	FocusDown  key.Binding
-	FocusLeft  key.Binding
-	FocusRight key.Binding
+	FocusLeft     key.Binding
+	FocusRight    key.Binding
+	ToggleDocs    key.Binding
+	RefreshSchema key.Binding
 }
 
 var keys = keyMap{
 	Execute: key.NewBinding(
-		key.WithKeys("alt+enter"),
-		key.WithHelp("alt+↵", "execute query"),
+		key.WithKeys("ctrl+enter"),
+		key.WithHelp("ctrl+↵", "execute query"),
 	),
 	Abort: key.NewBinding(
 		key.WithKeys("ctrl+c"),
@@ -52,5 +54,13 @@ var keys = keyMap{
 	FocusRight: key.NewBinding(
 		key.WithKeys("ctrl+l"),
 		key.WithHelp("ctrl+l", "focus right"),
+	),
+	ToggleDocs: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "toggle schema/results"),
+	),
+	RefreshSchema: key.NewBinding(
+		key.WithKeys("ctrl+r"),
+		key.WithHelp("ctrl+r", "refresh schema"),
 	),
 }
