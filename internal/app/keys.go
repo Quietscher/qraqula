@@ -18,8 +18,8 @@ type keyMap struct {
 
 var keys = keyMap{
 	Execute: key.NewBinding(
-		key.WithKeys("enter"),
-		key.WithHelp("enter", "execute query"),
+		key.WithKeys("alt+enter"),
+		key.WithHelp("alt+↵", "execute query"),
 	),
 	Abort: key.NewBinding(
 		key.WithKeys("ctrl+c"),

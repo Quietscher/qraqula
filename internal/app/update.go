@@ -66,7 +66,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		return *m, tea.Quit
 
-	case key.Matches(msg, keys.Execute) && m.focus == PanelResults:
+	case key.Matches(msg, keys.Execute):
+		return m.executeQuery()
+	case msg.String() == "enter" && m.focus == PanelResults:
 		return m.executeQuery()
 
 	case key.Matches(msg, keys.Tab):
