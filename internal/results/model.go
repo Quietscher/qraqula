@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -20,7 +20,9 @@ type Model struct {
 }
 
 func New(width, height int) Model {
-	vp := viewport.New(width, height-1) // title line
+	vp := viewport.New()
+	vp.SetWidth(width)
+	vp.SetHeight(height - 1) // title line
 	return Model{vp: vp, width: width, height: height}
 }
 
@@ -40,8 +42,8 @@ func (m *Model) SetPrettyJSON(data []byte) error {
 func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.vp.Width = w - 2
-	m.vp.Height = h - 3
+	m.vp.SetWidth(w - 2)
+	m.vp.SetHeight(h - 3)
 }
 
 func (m *Model) Focus() {}

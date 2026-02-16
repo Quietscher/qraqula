@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestNew(t *testing.T) {
@@ -42,7 +42,7 @@ func TestUpdate(t *testing.T) {
 	m := New()
 	m.Focus()
 	// Type a URL character by character
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
 	m = updated
 	if m.Value() != "h" {
 		t.Errorf("expected 'h', got %q", m.Value())

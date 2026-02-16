@@ -1,9 +1,9 @@
 package editor
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/lipgloss/v2"
 )
 
 var (
