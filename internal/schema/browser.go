@@ -5,7 +5,20 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+)
+
+// style constants
+var (
+	cursorStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	dimStyle          = lipgloss.NewStyle().Faint(true)
+	breadcrumbStyle   = lipgloss.NewStyle().Faint(true)
+	badgeStyle        = lipgloss.NewStyle().Faint(true)
+	browserTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
+	searchPromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	countStyle        = lipgloss.NewStyle().Faint(true)
 )
 
 // page represents a single view in the browser navigation stack.
@@ -23,28 +36,32 @@ type pageItem struct {
 }
 
 // Browser is a Bubble Tea model that lets the user navigate a GraphQL schema
-// with drill-down pages and breadcrumbs.
+// with drill-down pages, breadcrumbs, and search filtering.
 type Browser struct {
 	schema *Schema
 	stack  []page // navigation stack; last element is current page
-	cursor int    // selected index on the current page
-	offset int    // scroll offset for long lists
+	cursor int    // selected index on the current (filtered) page
+	offset int    // scroll offset for viewport content management
+
+	vp        viewport.Model
+	search    textinput.Model
+	searching bool
+	filter    string
+
 	width  int
 	height int
 }
 
-// style constants
-var (
-	cursorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	dimStyle        = lipgloss.NewStyle().Faint(true)
-	breadcrumbStyle = lipgloss.NewStyle().Faint(true)
-	badgeStyle      = lipgloss.NewStyle().Faint(true)
-	browserTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
-)
-
 // NewBrowser returns a Browser with no schema loaded.
 func NewBrowser() Browser {
-	return Browser{}
+	si := textinput.New()
+	si.Placeholder = "type to filter..."
+	si.CharLimit = 100
+
+	return Browser{
+		vp:     viewport.New(),
+		search: si,
+	}
 }
 
 // SetSchema sets the schema and resets navigation to the root page.
@@ -53,52 +70,109 @@ func (b *Browser) SetSchema(s *Schema) {
 	b.stack = nil
 	b.cursor = 0
 	b.offset = 0
+	b.filter = ""
+	b.searching = false
+	b.search.SetValue("")
 	if s != nil {
 		b.pushRoot()
 	}
+	b.syncViewport()
 }
 
 // SetSize sets the viewport dimensions.
 func (b *Browser) SetSize(w, h int) {
 	b.width = w
 	b.height = h
+	b.syncViewport()
 }
 
 // Focus is a no-op for now.
 func (b *Browser) Focus() {}
 
-// Blur is a no-op for now.
-func (b *Browser) Blur() {}
+// Blur exits search mode when the browser loses focus.
+func (b *Browser) Blur() {
+	if b.searching {
+		b.searching = false
+		b.search.Blur()
+		b.syncViewport()
+	}
+}
 
-// Update handles key messages for navigation.
+// Update handles key messages for navigation and search.
 func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "j", "down":
-			b.cursorDown()
-		case "k", "up":
-			b.cursorUp()
-		case "enter":
-			b.drillIn()
-		case "backspace", "h":
-			b.goBack()
+		if b.searching {
+			return b.handleSearchKey(msg)
 		}
+		return b.handleNavKey(msg)
 	}
 	return b, nil
 }
 
-// View renders the current page.
-func (b Browser) View() string {
-	if b.schema == nil {
-		return "No schema loaded"
-	}
-	if len(b.stack) == 0 {
-		return "No schema loaded"
+func (b *Browser) handleSearchKey(msg tea.KeyPressMsg) (Browser, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		b.searching = false
+		b.filter = ""
+		b.search.SetValue("")
+		b.search.Blur()
+		b.cursor = 0
+		b.offset = 0
+		b.syncViewport()
+		return *b, nil
+	case "enter":
+		b.searching = false
+		b.search.Blur()
+		b.syncViewport()
+		return *b, nil
 	}
 
-	p := b.currentPage()
-	var sb strings.Builder
+	var cmd tea.Cmd
+	b.search, cmd = b.search.Update(msg)
+	newFilter := b.search.Value()
+	if newFilter != b.filter {
+		b.filter = newFilter
+		b.cursor = 0
+		b.offset = 0
+		b.syncViewport()
+	}
+	return *b, cmd
+}
+
+func (b *Browser) handleNavKey(msg tea.KeyPressMsg) (Browser, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		b.cursorDown()
+	case "k", "up":
+		b.cursorUp()
+	case "enter", "l":
+		b.drillIn()
+	case "backspace", "h":
+		b.goBack()
+	case "/":
+		b.searching = true
+		cmd := b.search.Focus()
+		b.syncViewport()
+		return *b, cmd
+	case "G":
+		b.cursorEnd()
+	}
+	return *b, nil
+}
+
+// View renders the current page with header and scrollable content.
+func (b Browser) View() string {
+	if b.schema == nil || len(b.stack) == 0 {
+		lines := []string{dimStyle.Render("No schema loaded. Press Ctrl+R to fetch.")}
+		target := b.height - 2
+		for len(lines) < target {
+			lines = append(lines, "")
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	var header []string
 
 	// Breadcrumbs
 	if len(b.stack) > 1 {
@@ -106,62 +180,96 @@ func (b Browser) View() string {
 		for _, pg := range b.stack[:len(b.stack)-1] {
 			crumbs = append(crumbs, pg.title)
 		}
-		bc := strings.Join(crumbs, " > ")
-		sb.WriteString(breadcrumbStyle.Render(bc))
-		sb.WriteString("\n")
+		header = append(header, breadcrumbStyle.Render(strings.Join(crumbs, " > ")))
 	}
 
-	// Title
-	sb.WriteString(browserTitleStyle.Render(p.title))
-	sb.WriteString("\n")
-
-	// How many lines are used by header (breadcrumbs + title + blank line)
-	headerLines := 2 // title + blank
-	if len(b.stack) > 1 {
-		headerLines = 3 // breadcrumb + title + blank
+	// Title + item count
+	p := b.currentPage()
+	filtered := b.filteredItems()
+	title := browserTitleStyle.Render(p.title)
+	if b.filter != "" {
+		title += " " + countStyle.Render(fmt.Sprintf("(%d/%d)", len(filtered), len(p.items)))
+	} else {
+		title += " " + countStyle.Render(fmt.Sprintf("(%d items)", len(p.items)))
 	}
-	sb.WriteString("\n")
+	header = append(header, title)
 
-	// Visible area for items
-	visibleHeight := b.height - headerLines
-	if visibleHeight < 1 {
-		visibleHeight = 1
-	}
-
-	// Render visible items
-	end := b.offset + visibleHeight
-	if end > len(p.items) {
-		end = len(p.items)
-	}
-	for i := b.offset; i < end; i++ {
-		item := p.items[i]
-		line := b.renderItem(i, item)
-		sb.WriteString(line)
-		if i < end-1 {
-			sb.WriteString("\n")
-		}
+	// Search bar
+	if b.searching {
+		header = append(header, searchPromptStyle.Render("/")+b.search.View())
 	}
 
-	return sb.String()
+	return strings.Join(header, "\n") + "\n" + b.vp.View()
 }
 
 // --- internal helpers ---
 
-func (b *Browser) currentPage() page {
-	return b.stack[len(b.stack)-1]
+// vpHeight returns available height for the viewport content area.
+func (b *Browser) vpHeight() int {
+	h := b.height - 2 - b.headerLines() // subtract border (2) + header
+	if h < 1 {
+		h = 1
+	}
+	return h
 }
 
-func (b *Browser) adjustOffset(visibleHeight int) {
-	// Ensure cursor is visible
+// headerLines returns the number of lines used by the header above the viewport.
+func (b *Browser) headerLines() int {
+	n := 1 // title
+	if len(b.stack) > 1 {
+		n++ // breadcrumbs
+	}
+	if b.searching {
+		n++ // search input
+	}
+	return n
+}
+
+// syncViewport rebuilds the viewport content from current state.
+func (b *Browser) syncViewport() {
+	b.vp.SetWidth(b.width - 2)
+	b.vp.SetHeight(b.vpHeight())
+
+	if b.schema == nil || len(b.stack) == 0 {
+		b.vp.SetContent("")
+		return
+	}
+
+	items := b.filteredItems()
+	vh := b.vpHeight()
+
+	if len(items) == 0 {
+		b.cursor = 0
+		b.offset = 0
+		b.vp.SetContent(dimStyle.Render("  No matching items"))
+		return
+	}
+	if b.cursor >= len(items) {
+		b.cursor = len(items) - 1
+	}
+
+	// Keep cursor visible
 	if b.cursor < b.offset {
 		b.offset = b.cursor
 	}
-	if b.cursor >= b.offset+visibleHeight {
-		b.offset = b.cursor - visibleHeight + 1
+	if b.cursor >= b.offset+vh {
+		b.offset = b.cursor - vh + 1
 	}
 	if b.offset < 0 {
 		b.offset = 0
 	}
+
+	// Build visible lines
+	end := b.offset + vh
+	if end > len(items) {
+		end = len(items)
+	}
+	var lines []string
+	for i := b.offset; i < end; i++ {
+		lines = append(lines, b.renderItem(i, items[i]))
+	}
+
+	b.vp.SetContent(strings.Join(lines, "\n"))
 }
 
 func (b *Browser) renderItem(index int, item pageItem) string {
@@ -181,49 +289,69 @@ func (b *Browser) renderItem(index int, item pageItem) string {
 	return prefix + label
 }
 
-func (b *Browser) cursorDown() {
+func (b *Browser) filteredItems() []pageItem {
 	if len(b.stack) == 0 {
-		return
+		return nil
 	}
 	p := b.currentPage()
-	if b.cursor < len(p.items)-1 {
+	if b.filter == "" {
+		return p.items
+	}
+	lower := strings.ToLower(b.filter)
+	var out []pageItem
+	for _, item := range p.items {
+		if strings.Contains(strings.ToLower(item.label), lower) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func (b *Browser) currentPage() page {
+	return b.stack[len(b.stack)-1]
+}
+
+func (b *Browser) cursorDown() {
+	items := b.filteredItems()
+	if b.cursor < len(items)-1 {
 		b.cursor++
-		b.adjustOffset(b.visibleHeight())
+		b.syncViewport()
 	}
 }
 
 func (b *Browser) cursorUp() {
 	if b.cursor > 0 {
 		b.cursor--
-		b.adjustOffset(b.visibleHeight())
+		b.syncViewport()
 	}
 }
 
-func (b *Browser) visibleHeight() int {
-	headerLines := 2
-	if len(b.stack) > 1 {
-		headerLines = 3
+func (b *Browser) cursorEnd() {
+	items := b.filteredItems()
+	if len(items) > 0 {
+		b.cursor = len(items) - 1
+		b.syncViewport()
 	}
-	vh := b.height - headerLines
-	if vh < 1 {
-		vh = 1
-	}
-	return vh
 }
 
 func (b *Browser) drillIn() {
 	if len(b.stack) == 0 {
 		return
 	}
-	p := b.currentPage()
-	if b.cursor >= len(p.items) {
+	items := b.filteredItems()
+	if b.cursor >= len(items) {
 		return
 	}
-	item := p.items[b.cursor]
+	item := items[b.cursor]
 	if item.typeName == "" {
 		return
 	}
+	// Clear filter when drilling in
+	b.filter = ""
+	b.search.SetValue("")
+	b.searching = false
 	b.pushType(item.typeName)
+	b.syncViewport()
 }
 
 func (b *Browser) goBack() {
@@ -233,6 +361,10 @@ func (b *Browser) goBack() {
 	b.stack = b.stack[:len(b.stack)-1]
 	b.cursor = 0
 	b.offset = 0
+	b.filter = ""
+	b.search.SetValue("")
+	b.searching = false
+	b.syncViewport()
 }
 
 func (b *Browser) pushRoot() {
@@ -324,6 +456,7 @@ func (b *Browser) pushType(name string) {
 	b.stack = append(b.stack, page{title: title, items: items})
 	b.cursor = 0
 	b.offset = 0
+	b.syncViewport()
 }
 
 func (b *Browser) fieldDisplay(f Field) string {

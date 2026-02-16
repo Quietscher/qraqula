@@ -33,10 +33,11 @@ type Model struct {
 	cancelQuery    context.CancelFunc
 	rightPanelMode rightPanelMode
 
-	focus    Panel
-	querying bool
-	width    int
-	height   int
+	focus        Panel
+	querying     bool
+	lastEndpoint string
+	width        int
+	height       int
 }
 
 func NewModel() Model {

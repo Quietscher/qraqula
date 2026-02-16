@@ -79,8 +79,10 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
 		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	default:
-		// For single rune keys like j, k, h
+		// For single rune keys like j, k, h, l, /, G
 		r := []rune(s)
 		if len(r) == 1 {
 			return tea.KeyPressMsg{Code: r[0], Text: s}
@@ -384,5 +386,122 @@ func TestBrowserTypeBadges(t *testing.T) {
 	view := b.View()
 	if !strings.Contains(view, "[OBJECT]") {
 		t.Error("expected root page to show [OBJECT] badge")
+	}
+}
+
+func TestBrowserDrillInWithL(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	// At root, cursor=0 → Query. Press 'l' to drill in.
+	b = updateBrowser(b, keyPress("l"))
+
+	view := b.View()
+	if !strings.Contains(view, "user") {
+		t.Error("expected 'l' to drill into Query, showing 'user' field")
+	}
+}
+
+func TestBrowserCursorEnd(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	// Root has Query (0) and Mutation (1). Press G to go to end.
+	b = updateBrowser(b, keyPress("G"))
+	// Now cursor=1. Press enter → drill into Mutation
+	b = updateBrowser(b, keyPress("enter"))
+
+	view := b.View()
+	if !strings.Contains(view, "createUser") {
+		t.Error("expected G to move cursor to end, drill into Mutation")
+	}
+}
+
+func TestBrowserSearch(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	// Drill into Query to get fields
+	b = updateBrowser(b, keyPress("enter"))
+
+	// Start search with /
+	b = updateBrowser(b, keyPress("/"))
+	if !b.searching {
+		t.Error("expected search mode to be active after /")
+	}
+
+	// Type "users" to filter
+	for _, ch := range "users" {
+		b = updateBrowser(b, keyPress(string(ch)))
+	}
+
+	view := b.View()
+	if !strings.Contains(view, "users") {
+		t.Error("expected filtered view to show 'users'")
+	}
+
+	// Confirm search with enter
+	b = updateBrowser(b, keyPress("enter"))
+	if b.searching {
+		t.Error("expected search mode to be inactive after enter")
+	}
+	if b.filter != "users" {
+		t.Errorf("expected filter to be 'users', got %q", b.filter)
+	}
+}
+
+func TestBrowserSearchEscape(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	// Drill into Query
+	b = updateBrowser(b, keyPress("enter"))
+
+	// Start search and type something
+	b = updateBrowser(b, keyPress("/"))
+	b = updateBrowser(b, keyPress("u"))
+
+	// Escape should clear the filter
+	b = updateBrowser(b, keyPress("esc"))
+	if b.searching {
+		t.Error("expected search mode to be inactive after esc")
+	}
+	if b.filter != "" {
+		t.Errorf("expected filter to be empty after esc, got %q", b.filter)
+	}
+
+	// All items should be visible again
+	view := b.View()
+	if !strings.Contains(view, "user") {
+		t.Error("expected all items visible after esc, 'user' missing")
+	}
+}
+
+func TestBrowserItemCount(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	view := b.View()
+	if !strings.Contains(view, "2 items") {
+		t.Error("expected root page to show item count '2 items'")
+	}
+}
+
+func TestBrowserViewFillsHeight(t *testing.T) {
+	b := NewBrowser()
+	b.SetSchema(testSchema())
+	b.SetSize(80, 30)
+
+	view := b.View()
+	lines := strings.Split(view, "\n")
+	// View should fill the panel (height - 2 for border)
+	expectedLines := 28 // 30 - 2 (border)
+	if len(lines) < expectedLines {
+		t.Errorf("expected view to have at least %d lines for proper sizing, got %d", expectedLines, len(lines))
 	}
 }

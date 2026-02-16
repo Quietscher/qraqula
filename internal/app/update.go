@@ -78,29 +78,23 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, keys.Execute):
 		return m.executeQuery()
-	case msg.String() == "enter" && m.focus == PanelResults:
+	case msg.String() == "enter" && m.focus == PanelResults && m.rightPanelMode == modeResults:
 		return m.executeQuery()
 
 	case key.Matches(msg, keys.Tab):
-		m.setFocus(nextPanel(m.focus))
-		return *m, nil
+		return m.switchFocus(nextPanel(m.focus))
 
 	case key.Matches(msg, keys.ShiftTab):
-		m.setFocus(prevPanel(m.focus))
-		return *m, nil
+		return m.switchFocus(prevPanel(m.focus))
 
 	case key.Matches(msg, keys.FocusUp):
-		m.setFocus(navigatePanel(m.focus, "up"))
-		return *m, nil
+		return m.switchFocus(navigatePanel(m.focus, "up"))
 	case key.Matches(msg, keys.FocusDown):
-		m.setFocus(navigatePanel(m.focus, "down"))
-		return *m, nil
+		return m.switchFocus(navigatePanel(m.focus, "down"))
 	case key.Matches(msg, keys.FocusLeft):
-		m.setFocus(navigatePanel(m.focus, "left"))
-		return *m, nil
+		return m.switchFocus(navigatePanel(m.focus, "left"))
 	case key.Matches(msg, keys.FocusRight):
-		m.setFocus(navigatePanel(m.focus, "right"))
-		return *m, nil
+		return m.switchFocus(navigatePanel(m.focus, "right"))
 
 	case key.Matches(msg, keys.ToggleDocs):
 		if m.rightPanelMode == modeResults {
@@ -118,6 +112,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.updateFocused(msg)...)
 	return *m, tea.Batch(cmds...)
+}
+
+// switchFocus changes panel focus and auto-fetches schema when leaving the endpoint panel.
+func (m *Model) switchFocus(target Panel) (Model, tea.Cmd) {
+	prev := m.focus
+	m.setFocus(target)
+	if prev == PanelEndpoint && m.focus != PanelEndpoint {
+		ep := m.endpoint.Value()
+		if ep != "" && ep != m.lastEndpoint {
+			m.lastEndpoint = ep
+			return m.fetchSchema()
+		}
+	}
+	return *m, nil
 }
 
 func (m *Model) executeQuery() (Model, tea.Cmd) {
@@ -173,6 +181,7 @@ func (m *Model) fetchSchema() (Model, tea.Cmd) {
 		m.statusbar.SetError("No endpoint configured")
 		return *m, nil
 	}
+	m.lastEndpoint = ep
 	m.statusbar.SetSchemaLoading()
 	client := m.gqlClient
 	cmd := func() tea.Msg {
@@ -194,6 +203,8 @@ func (m *Model) setFocus(p Panel) {
 		m.editor.Blur()
 	case PanelVariables:
 		m.variables.Blur()
+	case PanelResults:
+		m.browser.Blur()
 	}
 
 	m.focus = p

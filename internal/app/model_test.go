@@ -123,3 +123,41 @@ func TestSchemaFetchErrorMsg(t *testing.T) {
 		t.Errorf("expected view to contain 'Schema fetch failed', got:\n%s", view)
 	}
 }
+
+func TestAutoFetchSchemaOnEndpointChange(t *testing.T) {
+	m := NewModel()
+	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Focus on endpoint
+	m.setFocus(PanelEndpoint)
+
+	// Type an endpoint URL
+	m.endpoint, _ = m.endpoint.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
+
+	// Tab away from endpoint — should trigger auto-fetch (returns a cmd)
+	m, cmd := updateModel(m, tea.KeyPressMsg{Code: tea.KeyTab})
+
+	if m.lastEndpoint != "h" {
+		t.Errorf("expected lastEndpoint to be 'h', got %q", m.lastEndpoint)
+	}
+	if cmd == nil {
+		t.Error("expected a command to be returned for schema fetch")
+	}
+}
+
+func TestEnterOnResultsOnlyExecutesInResultsMode(t *testing.T) {
+	m := NewModel()
+	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Set focus to results panel
+	m.setFocus(PanelResults)
+	m.rightPanelMode = modeSchema
+
+	// Enter should NOT execute query when in schema mode
+	m, cmd := updateModel(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.querying {
+		t.Error("expected enter not to execute query when in schema mode")
+	}
+	// The cmd should be nil or a browser update, not a query execution
+	_ = cmd
+}
