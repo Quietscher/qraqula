@@ -67,7 +67,7 @@ func (m Model) View() string {
 
 func keybindingHints() string {
 	bindings := []struct{ key, label string }{
-		{"enter", "execute"},
+		{"alt+↵", "execute"},
 		{"tab", "next"},
 		{"⇧tab", "prev"},
 		{"^c", "abort"},
