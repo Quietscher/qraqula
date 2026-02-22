@@ -1,0 +1,37 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: qla
+    main: ./cmd/qla
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+
+archives:
+  - format: tar.gz
+    name_template: "qla_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - repository:
+      owner: Quietscher
+      name: homebrew-qraqula
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    name: qla
+    homepage: "https://github.com/Quietscher/qraqula"
+    description: "All-in-one TUI GraphQL client"
+    license: "MIT"
+    install: |
+      bin.install "qla"
+    test: |
+      system "#{bin}/qla", "--version"

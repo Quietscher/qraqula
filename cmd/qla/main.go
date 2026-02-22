@@ -8,7 +8,14 @@ import (
 	"github.com/qraqula/qla/internal/app"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("qla " + version)
+		return
+	}
+
 	m := app.NewModel()
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
