@@ -19,6 +19,14 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ## Install
 
+### Homebrew
+
+```sh
+brew install Quietscher/qraqula/qla
+```
+
+### From source
+
 ```sh
 go install github.com/qraqula/qla@latest
 ```
