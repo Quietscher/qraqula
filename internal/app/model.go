@@ -15,6 +15,7 @@ import (
 	"github.com/qraqula/qla/internal/results"
 	"github.com/qraqula/qla/internal/schema"
 	"github.com/qraqula/qla/internal/statusbar"
+	"github.com/qraqula/qla/internal/validate"
 	"github.com/qraqula/qla/internal/variables"
 )
 
@@ -33,6 +34,7 @@ type Model struct {
 	statusbar statusbar.Model
 
 	browser   schema.Browser
+	schemaAST *validate.SchemaAST
 	gqlClient *graphql.Client
 
 	histSidebar history.Sidebar
@@ -85,15 +87,38 @@ func NewModel() Model {
 	_ = cfgStore.Load()
 
 	ep := endpoint.New()
-	if env := cfgStore.Config.ActiveEnvironment(); env != nil {
+	vars := variables.New()
+
+	// Restore last session state
+	meta := store.Meta
+	if meta.LastEnvName != "" {
+		// Try to find the env in current config
+		cfgStore.Config.ActiveEnv = meta.LastEnvName
+		if env := cfgStore.Config.ActiveEnvironment(); env != nil {
+			ep.SetValue(env.Endpoint)
+			ep.SetEnvName(env.Name)
+		} else {
+			// Env was deleted — fall back to no env
+			cfgStore.Config.ActiveEnv = ""
+		}
+	} else if env := cfgStore.Config.ActiveEnvironment(); env != nil {
 		ep.SetValue(env.Endpoint)
 		ep.SetEnvName(env.Name)
+	}
+	if meta.LastEndpoint != "" {
+		ep.SetValue(meta.LastEndpoint)
+	}
+	if meta.LastQuery != "" {
+		ed.SetValue(meta.LastQuery)
+	}
+	if meta.LastVariables != "" {
+		vars.SetValue(meta.LastVariables)
 	}
 
 	return Model{
 		endpoint:    ep,
 		editor:      ed,
-		variables:   variables.New(),
+		variables:   vars,
 		results:     results.New(80, 20),
 		statusbar:   statusbar.New(),
 		browser:     schema.NewBrowser(),
@@ -140,7 +165,7 @@ func NewModelWithStores(histStore *history.Store, cfgStore *config.Store) Model 
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.editor.Focus()
+	return tea.Batch(m.editor.Focus(), m.autoFetchSchema())
 }
 
 func defaultConfigDir() string {

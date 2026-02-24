@@ -19,6 +19,7 @@ type Entry struct {
 	Query     string    `json:"query"`
 	Variables string    `json:"variables"`
 	Endpoint  string    `json:"endpoint"`
+	EnvName   string    `json:"envName,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -33,6 +34,12 @@ type Meta struct {
 	FolderOrder []string `json:"folderOrder"`
 	Collapsed   []string `json:"collapsed"`
 	SidebarOpen bool     `json:"sidebarOpen"`
+
+	// Last session state (restored on startup)
+	LastQuery     string `json:"lastQuery,omitempty"`
+	LastVariables string `json:"lastVariables,omitempty"`
+	LastEndpoint  string `json:"lastEndpoint,omitempty"`
+	LastEnvName   string `json:"lastEnvName,omitempty"`
 }
 
 const (

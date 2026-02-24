@@ -9,6 +9,9 @@ var (
 	focusedBorder = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62"))
+	editingBorder = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("196"))
 	blurredBorder = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240"))
@@ -87,6 +90,9 @@ func (m Model) renderView() string {
 
 func (m Model) panelStyle(p Panel, width, height int) lipgloss.Style {
 	if m.focus == p {
+		if (p == PanelEditor && m.editor.Editing()) || (p == PanelVariables && m.variables.Editing()) {
+			return editingBorder.Width(width).Height(height)
+		}
 		return focusedBorder.Width(width).Height(height)
 	}
 	return blurredBorder.Width(width).Height(height)

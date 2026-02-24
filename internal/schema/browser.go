@@ -67,6 +67,19 @@ func NewBrowser() Browser {
 	}
 }
 
+// Schema returns the currently loaded schema, or nil.
+func (b *Browser) Schema() *Schema {
+	return b.schema
+}
+
+// CanClose returns true when an esc press should close the browser
+// (not filtering and at the root page).
+func (b *Browser) CanClose() bool {
+	return !b.list.SettingFilter() &&
+		b.list.FilterState() == list.Unfiltered &&
+		len(b.stack) <= 1
+}
+
 // SetSchema sets the schema and resets navigation to the root page.
 func (b *Browser) SetSchema(s *Schema) {
 	b.schema = s
@@ -141,7 +154,7 @@ func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 				return b, nil
 			}
 			// If not drillable, fall through to list
-		case "h", "backspace", "left":
+		case "h", "backspace", "left", "esc":
 			if b.goBack() {
 				return b, nil
 			}

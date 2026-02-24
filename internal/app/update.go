@@ -15,6 +15,7 @@ import (
 	"github.com/qraqula/qla/internal/history"
 	"github.com/qraqula/qla/internal/overlay"
 	"github.com/qraqula/qla/internal/schema"
+	"github.com/qraqula/qla/internal/validate"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -54,6 +55,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Query:     query,
 				Variables: vars,
 				Endpoint:  ep,
+				EnvName:   m.configStore.Config.ActiveEnv,
 				CreatedAt: time.Now(),
 			}
 			_ = m.histStore.AddEntry(entry)
@@ -78,8 +80,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SchemaFetchedMsg:
 		m.browser.SetSchema(msg.Schema)
+		m.schemaAST = validate.LoadSchema(msg.Schema)
 		m.statusbar.SetSchemaLoaded(len(msg.Schema.Types))
-		return m, nil
+		// Validate current query against the new schema
+		var cmd tea.Cmd
+		if q := m.editor.Value(); q != "" {
+			if err := validate.Query(q, m.schemaAST); err != nil {
+				cmd = m.setTimedError("Query: " + err.Error())
+			}
+		}
+		return m, cmd
 
 	case SchemaFetchErrorMsg:
 		return m, m.setTimedError("Schema fetch failed: " + msg.Err.Error())
@@ -88,8 +98,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.SetValue(msg.Entry.Query)
 		m.variables.SetValue(msg.Entry.Variables)
 		m.endpoint.SetValue(msg.Entry.Endpoint)
+		// Restore environment from the entry; clear if it no longer exists
+		if msg.Entry.EnvName != "" {
+			m.configStore.Config.ActiveEnv = msg.Entry.EnvName
+			if env := m.configStore.Config.ActiveEnvironment(); env != nil {
+				m.endpoint.SetValue(env.Endpoint)
+				m.endpoint.SetEnvName(env.Name)
+			} else {
+				m.configStore.Config.ActiveEnv = ""
+				m.endpoint.SetEnvName("")
+			}
+		} else {
+			m.configStore.Config.ActiveEnv = ""
+			m.endpoint.SetEnvName("")
+		}
 		m.setFocus(PanelEditor)
-		return m, nil
+		return m, m.autoFetchSchema()
 
 	case history.SidebarUpdatedMsg:
 		// Re-layout in case sidebar content changed visibility
@@ -110,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.endpoint.SetEnvName("")
 		}
 		m.layoutPanels()
-		return m, nil
+		return m, m.autoFetchSchema()
 
 	case EditorFinishedMsg:
 		if msg.Err != nil {
@@ -169,6 +193,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, keys.Quit):
+		m.saveSession()
 		return *m, tea.Quit
 
 	case key.Matches(msg, keys.Abort):
@@ -176,6 +201,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.cancelQuery()
 			return *m, nil
 		}
+		m.saveSession()
 		return *m, tea.Quit
 
 	case key.Matches(msg, keys.ToggleSidebar):
@@ -209,7 +235,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.editor.StopEditing()
 		m.statusbar.SetHints(hintsForFocus(m.focus, m.rightPanelMode))
 		var cmd tea.Cmd
-		if err := format.ValidateGraphQL(m.editor.Value()); err != nil {
+		if err := validate.Query(m.editor.Value(), m.schemaAST); err != nil {
 			cmd = m.setTimedError("Query: " + err.Error())
 		}
 		return *m, cmd
@@ -218,11 +244,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.statusbar.SetHints(hintsForFocus(m.focus, m.rightPanelMode))
 		var cmd tea.Cmd
 		if v := strings.TrimSpace(m.variables.Value()); v != "" {
-			if err := format.ValidateJSON(v); err != nil {
-				cmd = m.setTimedError("Variables: invalid JSON")
+			if err := validate.Variables(v, m.editor.Value(), m.schemaAST); err != nil {
+				cmd = m.setTimedError("Variables: " + err.Error())
 			}
 		}
 		return *m, cmd
+
+	// Escape to close schema browser (when at root, no filter)
+	case msg.String() == "esc" && m.focus == PanelResults && m.rightPanelMode == modeSchema && m.browser.CanClose():
+		m.rightPanelMode = modeResults
+		m.statusbar.SetHints(hintsForFocus(m.focus, m.rightPanelMode))
+		return *m, nil
 
 	case key.Matches(msg, keys.Tab):
 		if m.isEditing() {
@@ -268,7 +300,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			formatted := format.GraphQL(m.editor.Value())
 			m.editor.SetValue(formatted)
 			var cmd tea.Cmd
-			if err := format.ValidateGraphQL(formatted); err != nil {
+			if err := validate.Query(formatted, m.schemaAST); err != nil {
 				cmd = m.setTimedError("Query: " + err.Error())
 			}
 			return *m, cmd
@@ -281,6 +313,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 					return *m, m.setTimedError("Variables: invalid JSON")
 				}
 				m.variables.SetValue(formatted)
+				if verr := validate.Variables(formatted, m.editor.Value(), m.schemaAST); verr != nil {
+					return *m, m.setTimedError("Variables: " + verr.Error())
+				}
 			}
 			return *m, nil
 		}
@@ -304,6 +339,15 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.updateFocused(msg)...)
 	return *m, tea.Batch(cmds...)
+}
+
+// saveSession persists the current editor state so it can be restored on next launch.
+func (m *Model) saveSession() {
+	m.histStore.Meta.LastQuery = m.editor.Value()
+	m.histStore.Meta.LastVariables = m.variables.Value()
+	m.histStore.Meta.LastEndpoint = m.endpoint.Value()
+	m.histStore.Meta.LastEnvName = m.configStore.Config.ActiveEnv
+	_ = m.histStore.Save()
 }
 
 func (m *Model) isEditing() bool {
@@ -334,15 +378,15 @@ func (m *Model) scheduleLint() tea.Cmd {
 func (m *Model) runLint() {
 	switch m.focus {
 	case PanelEditor:
-		if err := format.ValidateGraphQL(m.editor.Value()); err != nil {
+		if err := validate.Query(m.editor.Value(), m.schemaAST); err != nil {
 			m.statusbar.SetError("Query: " + err.Error())
 		} else {
 			m.statusbar.Clear()
 		}
 	case PanelVariables:
 		if v := strings.TrimSpace(m.variables.Value()); v != "" {
-			if err := format.ValidateJSON(v); err != nil {
-				m.statusbar.SetError("Variables: invalid JSON")
+			if err := validate.Variables(v, m.editor.Value(), m.schemaAST); err != nil {
+				m.statusbar.SetError("Variables: " + err.Error())
 			} else {
 				m.statusbar.Clear()
 			}
@@ -442,7 +486,18 @@ func (m *Model) cycleEnvironment() (Model, tea.Cmd) {
 	}
 	_ = m.configStore.Save()
 	m.layoutPanels()
-	return *m, nil
+	return *m, m.autoFetchSchema()
+}
+
+// autoFetchSchema fetches the schema if the endpoint changed, silently skipping
+// when no endpoint is set. Use this for automatic triggers (startup, env cycle, history load).
+func (m *Model) autoFetchSchema() tea.Cmd {
+	ep := m.endpoint.Value()
+	if ep == "" || ep == m.lastEndpoint {
+		return nil
+	}
+	_, cmd := m.fetchSchema()
+	return cmd
 }
 
 func (m *Model) fetchSchema() (Model, tea.Cmd) {
