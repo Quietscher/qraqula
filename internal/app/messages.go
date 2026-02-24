@@ -27,3 +27,10 @@ type SchemaFetchedMsg struct {
 type SchemaFetchErrorMsg struct {
 	Err error
 }
+
+// EditorFinishedMsg is sent when the external editor process completes.
+type EditorFinishedMsg struct {
+	Content string
+	Panel   Panel
+	Err     error
+}

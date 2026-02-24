@@ -11,8 +11,8 @@ var (
 )
 
 type Model struct {
-	ta    textarea.Model
-	width int
+	ta     textarea.Model
+	width  int
 	height int
 }
 
@@ -20,6 +20,7 @@ func New() Model {
 	ta := textarea.New()
 	ta.Placeholder = "{ query { ... } }"
 	ta.ShowLineNumbers = false
+	ta.Prompt = ""
 	return Model{ta: ta}
 }
 

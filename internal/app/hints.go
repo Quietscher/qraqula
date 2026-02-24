@@ -5,6 +5,7 @@ import "github.com/qraqula/qla/internal/statusbar"
 var editorHints = []statusbar.Hint{
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "tab", Label: "next"},
+	{Key: "^o", Label: "editor"},
 	{Key: "^e", Label: "env"},
 	{Key: "^d", Label: "docs"},
 	{Key: "^b", Label: "sidebar"},
@@ -16,6 +17,7 @@ var editorHints = []statusbar.Hint{
 var variablesHints = []statusbar.Hint{
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "tab", Label: "next"},
+	{Key: "^o", Label: "editor"},
 	{Key: "^d", Label: "docs"},
 	{Key: "^b", Label: "sidebar"},
 	{Key: "^c", Label: "abort"},
@@ -25,6 +27,7 @@ var variablesHints = []statusbar.Hint{
 var resultsHints = []statusbar.Hint{
 	{Key: "↵", Label: "execute"},
 	{Key: "tab", Label: "next"},
+	{Key: "/", Label: "search"},
 	{Key: "^d", Label: "docs"},
 	{Key: "j/k", Label: "scroll"},
 	{Key: "^c", Label: "abort"},

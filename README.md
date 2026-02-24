@@ -8,10 +8,11 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ## Features
 
-- **Query editor** with vim keybindings
+- **Query editor** with vim keybindings and GraphQL syntax highlighting
 - **Schema introspection browser** — automatic introspection on connect, drill-down navigation, cross-level search
-- **Result viewer** with formatted JSON and scrolling
-- **Variables panel** with JSON validation
+- **Result viewer** with syntax-highlighted JSON, scrolling, and search
+- **Variables panel** with JSON syntax highlighting and validation
+- **External editor** — open query or variables in `$EDITOR` with `Ctrl+O`
 - **Query history** — auto-saved on execution, organized in folders, limited to 25 entries
 - **Query abort** — cancel running queries instantly with `Ctrl+C`
 - **Environments & headers** — named environments (dev/staging/prod) with endpoint, headers, and variables; global headers; cycle between envs
@@ -55,6 +56,15 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `Ctrl+E` | Open environments & headers overlay |
 | `Ctrl+N` | Cycle active environment |
 | `Ctrl+B` | Toggle history sidebar |
+| `Ctrl+O` | Open in `$EDITOR` (query/variables) |
+
+### Result Viewer
+
+| Key | Action |
+|---|---|
+| `/` | Toggle search |
+| `n` | Next match |
+| `N` | Previous match |
 
 ### Schema Browser
 

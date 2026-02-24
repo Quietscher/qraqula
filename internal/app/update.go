@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -32,9 +35,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		r := msg.Result
 		hasErrors := r.Response.HasErrors()
 
-		// Build display content
-		raw, _ := json.MarshalIndent(r.Response, "", "  ")
-		m.results.SetContent(string(raw))
+		// Build display content with syntax highlighting
+		raw, _ := json.Marshal(r.Response)
+		if err := m.results.SetPrettyJSON(raw); err != nil {
+			m.results.SetContent(string(raw))
+		}
 		m.statusbar.SetResult(r.StatusCode, r.Duration, r.Size, hasErrors)
 
 		// Auto-save to history
@@ -107,6 +112,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.layoutPanels()
 		return m, nil
+
+	case EditorFinishedMsg:
+		if msg.Err != nil {
+			m.statusbar.SetError("Editor: " + msg.Err.Error())
+			return m, nil
+		}
+		content := strings.TrimRight(msg.Content, "\n")
+		var focusCmd tea.Cmd
+		switch msg.Panel {
+		case PanelEditor:
+			m.editor.SetValue(content)
+			focusCmd = m.editor.Focus()
+		case PanelVariables:
+			m.variables.SetValue(content)
+			focusCmd = m.variables.Focus()
+		}
+		return m, focusCmd
 	}
 
 	// Forward to focused panel
@@ -157,7 +179,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, keys.Execute):
 		return m.executeQuery()
-	case msg.String() == "enter" && m.focus == PanelResults && m.rightPanelMode == modeResults:
+	case msg.String() == "enter" && m.focus == PanelResults && m.rightPanelMode == modeResults && !m.results.Searching():
 		return m.executeQuery()
 
 	case key.Matches(msg, keys.Tab):
@@ -190,6 +212,19 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, keys.RefreshSchema):
 		return m.fetchSchema()
+
+	case key.Matches(msg, keys.OpenEditor):
+		if m.focus == PanelEditor || m.focus == PanelVariables {
+			return m.openExternalEditor()
+		}
+		return *m, nil
+
+	case key.Matches(msg, keys.ToggleSearch):
+		if m.focus == PanelResults && m.rightPanelMode == modeResults {
+			m.results.ToggleSearch()
+			m.results.SetSize(m.rightW, m.contentH-2) // recalculate viewport height
+			return *m, nil
+		}
 	}
 
 	// Forward to focused panel
@@ -434,4 +469,52 @@ func (m *Model) layoutPanels() {
 	}
 	m.endpoint.SetWidth(epW)
 	m.statusbar.SetWidth(m.width)
+}
+
+func (m *Model) openExternalEditor() (Model, tea.Cmd) {
+	var content string
+	var ext string
+	panel := m.focus
+
+	switch panel {
+	case PanelEditor:
+		content = m.editor.Value()
+		ext = ".graphql"
+	case PanelVariables:
+		content = m.variables.Value()
+		ext = ".json"
+	default:
+		return *m, nil
+	}
+
+	tmpFile, err := os.CreateTemp("", "qla-*"+ext)
+	if err != nil {
+		m.statusbar.SetError("Failed to create temp file: " + err.Error())
+		return *m, nil
+	}
+	tmpFile.WriteString(content)
+	tmpFile.Close()
+
+	editorCmd := os.Getenv("VISUAL")
+	if editorCmd == "" {
+		editorCmd = os.Getenv("EDITOR")
+	}
+	if editorCmd == "" {
+		editorCmd = "vim"
+	}
+
+	c := exec.Command(editorCmd, tmpFile.Name())
+	path := tmpFile.Name()
+
+	return *m, tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			return EditorFinishedMsg{Err: err, Panel: panel}
+		}
+		data, readErr := os.ReadFile(path)
+		os.Remove(path)
+		if readErr != nil {
+			return EditorFinishedMsg{Err: readErr, Panel: panel}
+		}
+		return EditorFinishedMsg{Content: string(data), Panel: panel}
+	})
 }

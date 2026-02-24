@@ -23,6 +23,7 @@ func New() Model {
 	ta := textarea.New()
 	ta.Placeholder = `{"key": "value"}`
 	ta.ShowLineNumbers = false
+	ta.Prompt = ""
 	return Model{ta: ta}
 }
 

@@ -19,6 +19,8 @@ type keyMap struct {
 	ToggleSidebar key.Binding
 	ToggleOverlay key.Binding
 	CycleEnv      key.Binding
+	OpenEditor    key.Binding
+	ToggleSearch  key.Binding
 }
 
 var keys = keyMap{
@@ -77,5 +79,13 @@ var keys = keyMap{
 	CycleEnv: key.NewBinding(
 		key.WithKeys("ctrl+n"),
 		key.WithHelp("ctrl+n", "cycle environment"),
+	),
+	OpenEditor: key.NewBinding(
+		key.WithKeys("ctrl+o"),
+		key.WithHelp("ctrl+o", "open in $EDITOR"),
+	),
+	ToggleSearch: key.NewBinding(
+		key.WithKeys("/"),
+		key.WithHelp("/", "search results"),
 	),
 }
