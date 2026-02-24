@@ -3,24 +3,34 @@ package app
 import "github.com/qraqula/qla/internal/statusbar"
 
 var editorHints = []statusbar.Hint{
+	{Key: "↵", Label: "edit"},
 	{Key: "alt+↵", Label: "execute"},
+	{Key: "^p", Label: "prettify"},
 	{Key: "tab", Label: "next"},
-	{Key: "^o", Label: "editor"},
+	{Key: "^o", Label: "$EDITOR"},
 	{Key: "^e", Label: "env"},
 	{Key: "^d", Label: "docs"},
 	{Key: "^b", Label: "sidebar"},
-	{Key: "^r", Label: "schema"},
-	{Key: "^c", Label: "abort"},
 	{Key: "^q", Label: "quit"},
 }
 
 var variablesHints = []statusbar.Hint{
+	{Key: "↵", Label: "edit"},
 	{Key: "alt+↵", Label: "execute"},
+	{Key: "^p", Label: "prettify"},
 	{Key: "tab", Label: "next"},
-	{Key: "^o", Label: "editor"},
+	{Key: "^o", Label: "$EDITOR"},
 	{Key: "^d", Label: "docs"},
 	{Key: "^b", Label: "sidebar"},
-	{Key: "^c", Label: "abort"},
+	{Key: "^q", Label: "quit"},
+}
+
+var editingHints = []statusbar.Hint{
+	{Key: "esc", Label: "done"},
+	{Key: "tab", Label: "indent"},
+	{Key: "alt+↵", Label: "execute"},
+	{Key: "^p", Label: "prettify"},
+	{Key: "^o", Label: "$EDITOR"},
 	{Key: "^q", Label: "quit"},
 }
 

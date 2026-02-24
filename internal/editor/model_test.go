@@ -11,15 +11,27 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestFocus(t *testing.T) {
+func TestEditing(t *testing.T) {
 	m := New()
-	m.Focus()
-	if !m.Focused() {
-		t.Error("expected focused")
+	if m.Editing() {
+		t.Error("expected not editing initially")
 	}
+	m.StartEditing()
+	if !m.Editing() {
+		t.Error("expected editing after StartEditing")
+	}
+	m.StopEditing()
+	if m.Editing() {
+		t.Error("expected not editing after StopEditing")
+	}
+}
+
+func TestBlurStopsEditing(t *testing.T) {
+	m := New()
+	m.StartEditing()
 	m.Blur()
-	if m.Focused() {
-		t.Error("expected not focused")
+	if m.Editing() {
+		t.Error("expected Blur to stop editing")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/qraqula/qla/internal/format"
 	"github.com/qraqula/qla/internal/graphql"
 	"github.com/qraqula/qla/internal/history"
 	"github.com/qraqula/qla/internal/overlay"
@@ -66,8 +67,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.querying = false
 		m.cancelQuery = nil
 		m.results.SetContent("Error: " + msg.Err.Error())
-		m.statusbar.SetError(msg.Err.Error())
-		return m, nil
+		return m, m.setTimedError(msg.Err.Error())
 
 	case QueryAbortedMsg:
 		m.querying = false
@@ -82,8 +82,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SchemaFetchErrorMsg:
-		m.statusbar.SetError("Schema fetch failed: " + msg.Err.Error())
-		return m, nil
+		return m, m.setTimedError("Schema fetch failed: " + msg.Err.Error())
 
 	case history.LoadEntryMsg:
 		m.editor.SetValue(msg.Entry.Query)
@@ -115,20 +114,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case EditorFinishedMsg:
 		if msg.Err != nil {
-			m.statusbar.SetError("Editor: " + msg.Err.Error())
-			return m, nil
+			return m, m.setTimedError("Editor: " + msg.Err.Error())
 		}
 		content := strings.TrimRight(msg.Content, "\n")
-		var focusCmd tea.Cmd
+		var editCmd tea.Cmd
 		switch msg.Panel {
 		case PanelEditor:
 			m.editor.SetValue(content)
-			focusCmd = m.editor.Focus()
+			editCmd = m.editor.StartEditing()
 		case PanelVariables:
 			m.variables.SetValue(content)
-			focusCmd = m.variables.Focus()
+			editCmd = m.variables.StartEditing()
 		}
-		return m, focusCmd
+		m.statusbar.SetHints(editingHints)
+		return m, editCmd
+
+	case statusClearMsg:
+		if msg.gen == m.statusClearGen {
+			m.statusbar.Clear()
+		}
+		return m, nil
+
+	case lintMsg:
+		if msg.gen == m.lintGen {
+			m.runLint()
+		}
+		return m, nil
 	}
 
 	// Forward to focused panel
@@ -179,14 +190,53 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, keys.Execute):
 		return m.executeQuery()
+
+	// Enter to start editing in query/variables panels
+	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():
+		cmd := m.editor.StartEditing()
+		m.statusbar.SetHints(editingHints)
+		return *m, cmd
+	case msg.String() == "enter" && m.focus == PanelVariables && !m.variables.Editing():
+		cmd := m.variables.StartEditing()
+		m.statusbar.SetHints(editingHints)
+		return *m, cmd
+
 	case msg.String() == "enter" && m.focus == PanelResults && m.rightPanelMode == modeResults && !m.results.Searching():
 		return m.executeQuery()
 
+	// Escape to stop editing + lint
+	case msg.String() == "esc" && m.focus == PanelEditor && m.editor.Editing():
+		m.editor.StopEditing()
+		m.statusbar.SetHints(hintsForFocus(m.focus, m.rightPanelMode))
+		var cmd tea.Cmd
+		if err := format.ValidateGraphQL(m.editor.Value()); err != nil {
+			cmd = m.setTimedError("Query: " + err.Error())
+		}
+		return *m, cmd
+	case msg.String() == "esc" && m.focus == PanelVariables && m.variables.Editing():
+		m.variables.StopEditing()
+		m.statusbar.SetHints(hintsForFocus(m.focus, m.rightPanelMode))
+		var cmd tea.Cmd
+		if v := strings.TrimSpace(m.variables.Value()); v != "" {
+			if err := format.ValidateJSON(v); err != nil {
+				cmd = m.setTimedError("Variables: invalid JSON")
+			}
+		}
+		return *m, cmd
+
 	case key.Matches(msg, keys.Tab):
-		return m.switchFocus(nextPanel(m.focus, showSidebar))
+		if m.isEditing() {
+			// Let tab pass through to textarea for indentation
+		} else {
+			return m.switchFocus(nextPanel(m.focus, showSidebar))
+		}
 
 	case key.Matches(msg, keys.ShiftTab):
-		return m.switchFocus(prevPanel(m.focus, showSidebar))
+		if m.isEditing() {
+			// Let shift+tab pass through to textarea
+		} else {
+			return m.switchFocus(prevPanel(m.focus, showSidebar))
+		}
 
 	case key.Matches(msg, keys.FocusUp):
 		return m.switchFocus(navigatePanel(m.focus, "up", showSidebar))
@@ -200,6 +250,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, keys.ToggleDocs):
 		if m.rightPanelMode == modeResults {
 			m.rightPanelMode = modeSchema
+			m.setFocus(PanelResults)
 		} else {
 			m.rightPanelMode = modeResults
 		}
@@ -207,11 +258,33 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return *m, nil
 
 	case key.Matches(msg, keys.CycleEnv):
-		m.cycleEnvironment()
-		return *m, nil
+		return m.cycleEnvironment()
 
 	case key.Matches(msg, keys.RefreshSchema):
 		return m.fetchSchema()
+
+	case key.Matches(msg, keys.Prettify):
+		if m.focus == PanelEditor {
+			formatted := format.GraphQL(m.editor.Value())
+			m.editor.SetValue(formatted)
+			var cmd tea.Cmd
+			if err := format.ValidateGraphQL(formatted); err != nil {
+				cmd = m.setTimedError("Query: " + err.Error())
+			}
+			return *m, cmd
+		}
+		if m.focus == PanelVariables {
+			v := strings.TrimSpace(m.variables.Value())
+			if v != "" {
+				formatted, err := format.JSON(v)
+				if err != nil {
+					return *m, m.setTimedError("Variables: invalid JSON")
+				}
+				m.variables.SetValue(formatted)
+			}
+			return *m, nil
+		}
+		return *m, nil
 
 	case key.Matches(msg, keys.OpenEditor):
 		if m.focus == PanelEditor || m.focus == PanelVariables {
@@ -231,6 +304,52 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.updateFocused(msg)...)
 	return *m, tea.Batch(cmds...)
+}
+
+func (m *Model) isEditing() bool {
+	return (m.focus == PanelEditor && m.editor.Editing()) ||
+		(m.focus == PanelVariables && m.variables.Editing())
+}
+
+// setTimedError shows an error in the status bar that auto-clears after 3 seconds.
+func (m *Model) setTimedError(msg string) tea.Cmd {
+	m.statusbar.SetError(msg)
+	m.statusClearGen++
+	gen := m.statusClearGen
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return statusClearMsg{gen: gen}
+	})
+}
+
+// scheduleLint starts a 500ms debounce timer for linting.
+func (m *Model) scheduleLint() tea.Cmd {
+	m.lintGen++
+	gen := m.lintGen
+	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg {
+		return lintMsg{gen: gen}
+	})
+}
+
+// runLint validates the content of the currently focused editor.
+func (m *Model) runLint() {
+	switch m.focus {
+	case PanelEditor:
+		if err := format.ValidateGraphQL(m.editor.Value()); err != nil {
+			m.statusbar.SetError("Query: " + err.Error())
+		} else {
+			m.statusbar.Clear()
+		}
+	case PanelVariables:
+		if v := strings.TrimSpace(m.variables.Value()); v != "" {
+			if err := format.ValidateJSON(v); err != nil {
+				m.statusbar.SetError("Variables: invalid JSON")
+			} else {
+				m.statusbar.Clear()
+			}
+		} else {
+			m.statusbar.Clear()
+		}
+	}
 }
 
 // switchFocus changes panel focus and auto-fetches schema when leaving the endpoint panel.
@@ -253,14 +372,12 @@ func (m *Model) executeQuery() (Model, tea.Cmd) {
 	}
 	ep := m.endpoint.Value()
 	if ep == "" {
-		m.statusbar.SetError("No endpoint configured")
-		return *m, nil
+		return *m, m.setTimedError("No endpoint configured")
 	}
 
 	vars, err := m.variables.ParsedVariables()
 	if err != nil {
-		m.statusbar.SetError("Invalid variables JSON: " + err.Error())
-		return *m, nil
+		return *m, m.setTimedError("Invalid variables JSON: " + err.Error())
 	}
 
 	query := m.editor.Value()
@@ -295,11 +412,10 @@ func (m *Model) executeQuery() (Model, tea.Cmd) {
 	return *m, cmd
 }
 
-func (m *Model) cycleEnvironment() {
+func (m *Model) cycleEnvironment() (Model, tea.Cmd) {
 	names := m.configStore.Config.EnvNames()
 	if len(names) == 0 {
-		m.statusbar.SetError("No environments configured (ctrl+e to add)")
-		return
+		return *m, m.setTimedError("No environments configured (ctrl+e to add)")
 	}
 
 	current := m.configStore.Config.ActiveEnv
@@ -326,13 +442,13 @@ func (m *Model) cycleEnvironment() {
 	}
 	_ = m.configStore.Save()
 	m.layoutPanels()
+	return *m, nil
 }
 
 func (m *Model) fetchSchema() (Model, tea.Cmd) {
 	ep := m.endpoint.Value()
 	if ep == "" {
-		m.statusbar.SetError("No endpoint configured")
-		return *m, nil
+		return *m, m.setTimedError("No endpoint configured")
 	}
 	m.lastEndpoint = ep
 	m.statusbar.SetSchemaLoading()
@@ -388,9 +504,17 @@ func (m *Model) updateFocused(msg tea.Msg) []tea.Cmd {
 	case PanelEndpoint:
 		m.endpoint, cmd = m.endpoint.Update(msg)
 	case PanelEditor:
+		prev := m.editor.Value()
 		m.editor, cmd = m.editor.Update(msg)
+		if m.editor.Editing() && m.editor.Value() != prev {
+			cmds = append(cmds, m.scheduleLint())
+		}
 	case PanelVariables:
+		prev := m.variables.Value()
 		m.variables, cmd = m.variables.Update(msg)
+		if m.variables.Editing() && m.variables.Value() != prev {
+			cmds = append(cmds, m.scheduleLint())
+		}
 	case PanelResults:
 		if m.rightPanelMode == modeSchema {
 			m.browser, cmd = m.browser.Update(msg)
@@ -489,8 +613,7 @@ func (m *Model) openExternalEditor() (Model, tea.Cmd) {
 
 	tmpFile, err := os.CreateTemp("", "qla-*"+ext)
 	if err != nil {
-		m.statusbar.SetError("Failed to create temp file: " + err.Error())
-		return *m, nil
+		return *m, m.setTimedError("Failed to create temp file: " + err.Error())
 	}
 	tmpFile.WriteString(content)
 	tmpFile.Close()

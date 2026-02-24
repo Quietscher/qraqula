@@ -34,3 +34,9 @@ type EditorFinishedMsg struct {
 	Panel   Panel
 	Err     error
 }
+
+// statusClearMsg fires after a delay to clear the status bar error.
+type statusClearMsg struct{ gen int }
+
+// lintMsg fires after a debounce delay to lint the editor content.
+type lintMsg struct{ gen int }

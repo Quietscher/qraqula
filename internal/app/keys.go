@@ -21,6 +21,7 @@ type keyMap struct {
 	CycleEnv      key.Binding
 	OpenEditor    key.Binding
 	ToggleSearch  key.Binding
+	Prettify      key.Binding
 }
 
 var keys = keyMap{
@@ -87,5 +88,9 @@ var keys = keyMap{
 	ToggleSearch: key.NewBinding(
 		key.WithKeys("/"),
 		key.WithHelp("/", "search results"),
+	),
+	Prettify: key.NewBinding(
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "prettify"),
 	),
 }

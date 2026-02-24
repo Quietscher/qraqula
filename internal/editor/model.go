@@ -11,9 +11,10 @@ var (
 )
 
 type Model struct {
-	ta     textarea.Model
-	width  int
-	height int
+	ta      textarea.Model
+	width   int
+	height  int
+	editing bool
 }
 
 func New() Model {
@@ -33,15 +34,32 @@ func (m *Model) SetValue(s string) {
 }
 
 func (m *Model) Focus() tea.Cmd {
-	return m.ta.Focus()
+	return nil
 }
 
 func (m *Model) Blur() {
-	m.ta.Blur()
+	if m.editing {
+		m.editing = false
+		m.ta.Blur()
+	}
 }
 
 func (m Model) Focused() bool {
 	return m.ta.Focused()
+}
+
+func (m Model) Editing() bool {
+	return m.editing
+}
+
+func (m *Model) StartEditing() tea.Cmd {
+	m.editing = true
+	return m.ta.Focus()
+}
+
+func (m *Model) StopEditing() {
+	m.editing = false
+	m.ta.Blur()
 }
 
 func (m *Model) SetSize(w, h int) {
@@ -52,6 +70,13 @@ func (m *Model) SetSize(w, h int) {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	if !m.editing {
+		return m, nil
+	}
+	if kmsg, ok := msg.(tea.KeyPressMsg); ok && kmsg.String() == "tab" {
+		m.ta.InsertString("\t")
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.ta, cmd = m.ta.Update(msg)
 	return m, cmd

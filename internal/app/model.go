@@ -51,6 +51,10 @@ type Model struct {
 	width        int
 	height       int
 
+	// Timer generation counters for debouncing
+	statusClearGen int
+	lintGen        int
+
 	// Cached panel dimensions from layoutPanels (content size, excluding border)
 	sidebarW int // 3-panel mode only
 	midW     int // 3-panel mode only
