@@ -169,9 +169,9 @@ func (m Model) Init() tea.Cmd {
 }
 
 func defaultConfigDir() string {
-	configDir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		configDir = filepath.Join(os.Getenv("HOME"), ".config")
+		home = os.Getenv("HOME")
 	}
-	return filepath.Join(configDir, "qraqula")
+	return filepath.Join(home, ".config", "qraqula")
 }

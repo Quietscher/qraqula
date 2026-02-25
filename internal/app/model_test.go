@@ -129,8 +129,7 @@ func TestSchemaFetchErrorMsg(t *testing.T) {
 }
 
 func TestAutoFetchSchemaOnEndpointChange(t *testing.T) {
-	m := NewModel()
-	m, _ = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m := newTestModel(t)
 
 	// Focus on endpoint
 	m.setFocus(PanelEndpoint)

@@ -1,12 +1,6 @@
 package history
 
 import (
-	"fmt"
-	"io"
-	"strings"
-
-	"charm.land/bubbles/v2/list"
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -22,7 +16,6 @@ var (
 	hTitleStyle   = lipgloss.NewStyle().Foreground(colorWhite)
 	hSelTitle     = lipgloss.NewStyle().Foreground(colorWhite).Bold(true)
 	hDimStyle     = lipgloss.NewStyle().Foreground(colorDim)
-	hFolderStyle  = lipgloss.NewStyle().Foreground(colorSubtle)
 	hSepLabel     = lipgloss.NewStyle().Foreground(colorSubtle).Bold(true)
 	hSepLine      = lipgloss.NewStyle().Foreground(colorDim)
 )
@@ -30,72 +23,26 @@ var (
 type itemKind int
 
 const (
-	kindFolder    itemKind = iota
+	kindFolder itemKind = iota
 	kindEntry
-	kindSeparator
 )
 
-// sidebarItem is a list item for the history sidebar.
+// sidebarItem represents a row in the history sidebar.
 type sidebarItem struct {
 	kind      itemKind
 	name      string // display name
-	folder    string // parent folder name (empty for folders/separator)
-	entryID   string // entry ID (empty for folders/separator)
+	folder    string // parent folder name (empty for folders/unsorted)
+	entryID   string // entry ID (empty for folders)
 	endpoint  string // dim suffix for entries
 	collapsed bool   // only for kindFolder
 }
 
-func (i sidebarItem) Title() string       { return i.name }
-func (i sidebarItem) Description() string { return i.endpoint }
-func (i sidebarItem) FilterValue() string { return i.name + " " + i.endpoint }
-
-// scrollState holds the marquee scroll state shared between sidebar and delegate.
+// scrollState holds the marquee scroll state.
 type scrollState struct {
 	offset  int  // current rune offset into the name
 	active  bool // whether scrolling is active (name is truncated)
 	paused  bool // manual scroll pauses auto-scroll until re-selection
 	lastIdx int  // last selected index (to detect changes)
-}
-
-// sidebarDelegate renders history sidebar items with the vampire theme.
-type sidebarDelegate struct {
-	scroll *scrollState
-}
-
-func newSidebarDelegate() sidebarDelegate {
-	return sidebarDelegate{scroll: &scrollState{lastIdx: -1}}
-}
-
-func (d sidebarDelegate) Height() int  { return 1 }
-func (d sidebarDelegate) Spacing() int { return 0 }
-
-func (d sidebarDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d sidebarDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	si, ok := item.(sidebarItem)
-	if !ok {
-		return
-	}
-
-	isSelected := index == m.Index()
-	// Match schema browser: subtract padding from list width
-	width := m.Width() - 4
-	if width < 4 {
-		width = 4
-	}
-
-	var line string
-	switch si.kind {
-	case kindFolder:
-		line = d.renderFolder(si, isSelected, width)
-	case kindEntry:
-		line = d.renderEntry(si, isSelected, width)
-	case kindSeparator:
-		line = d.renderSeparator(width)
-	}
-
-	// Hard cap: force exactly `width` visible chars, no wrapping possible
-	fmt.Fprint(w, lipgloss.NewStyle().Width(width).MaxWidth(width).Render(line))
 }
 
 // truncateVisual cuts a string to fit within maxWidth visible chars, adding … if needed.
@@ -117,7 +64,6 @@ func truncateVisual(s string, maxWidth int) string {
 }
 
 // marquee returns a sliding window of a string at the given rune offset.
-// If offset is 0 or the string fits, it behaves like truncateVisual.
 func marquee(s string, maxWidth, offset int) string {
 	if maxWidth <= 0 {
 		return ""
@@ -129,7 +75,6 @@ func marquee(s string, maxWidth, offset int) string {
 	if offset >= len(runes) {
 		offset = 0
 	}
-	// Take a substring starting at offset
 	sub := runes[offset:]
 	candidate := string(sub)
 	if lipgloss.Width(candidate) <= maxWidth {
@@ -143,7 +88,8 @@ func needsScroll(s string, maxWidth int) bool {
 	return lipgloss.Width(s) > maxWidth
 }
 
-func (d sidebarDelegate) renderFolder(si sidebarItem, selected bool, width int) string {
+// renderFolderLine renders a folder item as a single line.
+func renderFolderLine(si sidebarItem, selected bool, width, scrollOffset int) string {
 	var prefix string
 	if selected {
 		prefix = hSelectedBar.String()
@@ -166,8 +112,8 @@ func (d sidebarDelegate) renderFolder(si sidebarItem, selected bool, width int) 
 	}
 
 	var name string
-	if selected && d.scroll != nil {
-		name = marquee(si.name, nameMax, d.scroll.offset)
+	if selected {
+		name = marquee(si.name, nameMax, scrollOffset)
 	} else {
 		name = truncateVisual(si.name, nameMax)
 	}
@@ -181,7 +127,8 @@ func (d sidebarDelegate) renderFolder(si sidebarItem, selected bool, width int) 
 	return prefix + icon + nameStr
 }
 
-func (d sidebarDelegate) renderEntry(si sidebarItem, selected bool, width int) string {
+// renderEntryLine renders an entry item as a single line.
+func renderEntryLine(si sidebarItem, selected bool, width, scrollOffset int) string {
 	var prefix string
 	if selected {
 		prefix = hSelectedBar.String()
@@ -207,8 +154,8 @@ func (d sidebarDelegate) renderEntry(si sidebarItem, selected bool, width int) s
 	}
 
 	var name string
-	if selected && d.scroll != nil {
-		name = marquee(si.name, nameMax, d.scroll.offset)
+	if selected {
+		name = marquee(si.name, nameMax, scrollOffset)
 	} else {
 		name = truncateVisual(si.name, nameMax)
 	}
@@ -220,20 +167,4 @@ func (d sidebarDelegate) renderEntry(si sidebarItem, selected bool, width int) s
 	}
 
 	return prefix + indent + bullet + nameStr
-}
-
-func (d sidebarDelegate) renderSeparator(width int) string {
-	label := hSepLabel.Render(" Unsorted ")
-	lineChar := "─"
-	labelWidth := lipgloss.Width(label)
-	prefixW := 1
-	remaining := width - labelWidth - prefixW
-	if remaining < 2 {
-		remaining = 2
-	}
-	left := remaining / 3
-	right := remaining - left
-	leftLine := hSepLine.Render(strings.Repeat(lineChar, left))
-	rightLine := hSepLine.Render(strings.Repeat(lineChar, right))
-	return " " + leftLine + label + rightLine
 }
