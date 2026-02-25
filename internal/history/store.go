@@ -45,7 +45,7 @@ type Meta struct {
 const (
 	metaFile     = "_meta.json"
 	unsortedDir  = "unsorted"
-	maxEntries   = 25
+	maxEntries   = 50
 	maxNameLen   = 30
 )
 
@@ -187,23 +187,21 @@ func (s *Store) SaveEntry(e Entry, folder string) error {
 	return os.Rename(tmp, path)
 }
 
-// AddEntry adds an entry to unsorted, enforces 25-entry global limit, and persists.
+// AddEntry adds an entry to unsorted, enforces entry limit on unsorted only, and persists.
+// Entries in user-organized folders are never evicted.
 func (s *Store) AddEntry(e Entry) error {
 	s.unsorted = append([]Entry{e}, s.unsorted...)
 	if err := s.SaveEntry(e, unsortedDir); err != nil {
 		return err
 	}
 
-	// Enforce global limit
-	all := s.AllEntries()
-	if len(all) > maxEntries {
-		// Find and evict the oldest entries
-		sort.Slice(all, func(i, j int) bool {
-			return all[i].CreatedAt.After(all[j].CreatedAt)
-		})
-		for _, old := range all[maxEntries:] {
-			_ = s.DeleteEntry(old.ID)
+	// Enforce limit on unsorted only — folder entries are explicitly organized
+	if len(s.unsorted) > maxEntries {
+		sortEntriesNewestFirst(s.unsorted)
+		for _, old := range s.unsorted[maxEntries:] {
+			_ = os.Remove(filepath.Join(s.dir, unsortedDir, old.ID+".json"))
 		}
+		s.unsorted = s.unsorted[:maxEntries]
 	}
 	return nil
 }

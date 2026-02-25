@@ -1,6 +1,9 @@
 package history
 
 import (
+	"fmt"
+	"time"
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -30,11 +33,12 @@ const (
 // sidebarItem represents a row in the history sidebar.
 type sidebarItem struct {
 	kind      itemKind
-	name      string // display name
-	folder    string // parent folder name (empty for folders/unsorted)
-	entryID   string // entry ID (empty for folders)
-	endpoint  string // dim suffix for entries
-	collapsed bool   // only for kindFolder
+	name      string    // display name
+	folder    string    // parent folder name (empty for folders/unsorted)
+	entryID   string    // entry ID (empty for folders)
+	endpoint  string    // dim suffix for entries
+	collapsed bool      // only for kindFolder
+	createdAt time.Time // entry timestamp
 }
 
 // scrollState holds the marquee scroll state.
@@ -127,6 +131,29 @@ func renderFolderLine(si sidebarItem, selected bool, width, scrollOffset int) st
 	return prefix + icon + nameStr
 }
 
+// formatTimestamp formats a timestamp for display in the sidebar.
+// Today: "14:05", otherwise: "14:05 DD.MM.YYYY".
+func formatTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	timeStr := fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
+	if t.After(today) {
+		return timeStr
+	}
+	return timeStr + " " + fmt.Sprintf("%02d.%02d.%d", t.Day(), int(t.Month()), t.Year())
+}
+
+// timestampWidth returns the visual width a timestamp would occupy (including leading space).
+func timestampWidth(ts string) int {
+	if ts == "" {
+		return 0
+	}
+	return 1 + len(ts) // " " + timestamp
+}
+
 // renderEntryLine renders an entry item as a single line.
 func renderEntryLine(si sidebarItem, selected bool, width, scrollOffset int) string {
 	var prefix string
@@ -148,9 +175,19 @@ func renderEntryLine(si sidebarItem, selected bool, width, scrollOffset int) str
 	bulletW := lipgloss.Width(bullet)
 	overhead := prefixW + indentW + bulletW
 
-	nameMax := width - overhead
-	if nameMax < 1 {
-		nameMax = 1
+	availW := width - overhead
+	if availW < 1 {
+		availW = 1
+	}
+
+	// Determine if timestamp fits alongside the name (need at least 3 chars for name)
+	ts := formatTimestamp(si.createdAt)
+	tsW := timestampWidth(ts)
+	showTs := tsW > 0 && availW-tsW >= 3
+
+	nameMax := availW
+	if showTs {
+		nameMax = availW - tsW
 	}
 
 	var name string
@@ -166,5 +203,10 @@ func renderEntryLine(si sidebarItem, selected bool, width, scrollOffset int) str
 		nameStr = hTitleStyle.Render(name)
 	}
 
-	return prefix + indent + bullet + nameStr
+	var tsSuffix string
+	if showTs {
+		tsSuffix = " " + hDimStyle.Render(ts)
+	}
+
+	return prefix + indent + bullet + nameStr + tsSuffix
 }

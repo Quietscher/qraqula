@@ -61,8 +61,8 @@ func TestAddEntryRespectsLimit(t *testing.T) {
 	s := NewStore(dir)
 	_ = s.Load()
 
-	// Add 26 entries
-	for i := 0; i < 26; i++ {
+	// Add maxEntries+1 entries
+	for i := 0; i < maxEntries+1; i++ {
 		e := Entry{
 			ID:        GenerateID(),
 			Name:      "entry",
@@ -75,8 +75,8 @@ func TestAddEntryRespectsLimit(t *testing.T) {
 	}
 
 	all := s.AllEntries()
-	if len(all) != 25 {
-		t.Errorf("expected 25 entries after limit enforcement, got %d", len(all))
+	if len(all) != maxEntries {
+		t.Errorf("expected %d entries after limit enforcement, got %d", maxEntries, len(all))
 	}
 }
 

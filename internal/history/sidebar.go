@@ -173,11 +173,12 @@ func (sb *Sidebar) rebuildSections() {
 		if !collapsed {
 			for _, e := range f.Entries {
 				sb.folderItems = append(sb.folderItems, sidebarItem{
-					kind:     kindEntry,
-					name:     e.Name,
-					folder:   f.Name,
-					entryID:  e.ID,
-					endpoint: e.Endpoint,
+					kind:      kindEntry,
+					name:      e.Name,
+					folder:    f.Name,
+					entryID:   e.ID,
+					endpoint:  e.Endpoint,
+					createdAt: e.CreatedAt,
 				})
 			}
 		}
@@ -185,11 +186,12 @@ func (sb *Sidebar) rebuildSections() {
 
 	for _, e := range unsorted {
 		sb.recentItems = append(sb.recentItems, sidebarItem{
-			kind:     kindEntry,
-			name:     e.Name,
-			folder:   "",
-			entryID:  e.ID,
-			endpoint: e.Endpoint,
+			kind:      kindEntry,
+			name:      e.Name,
+			folder:    "",
+			entryID:   e.ID,
+			endpoint:  e.Endpoint,
+			createdAt: e.CreatedAt,
 		})
 	}
 
@@ -325,14 +327,23 @@ func (sb Sidebar) sectionHeights() (foldersH, recentH int) {
 
 // --- Scroll / cursor management ---
 
+// viewHeight returns the number of item lines visible in a section,
+// reserving 1 line for a scroll indicator when the section needs scrolling.
+func viewHeight(sectionH, itemCount int) int {
+	if itemCount > sectionH && sectionH > 1 {
+		return sectionH - 1
+	}
+	return sectionH
+}
+
 func (sb *Sidebar) ensureFolderVisible() {
 	fH, _ := sb.sectionHeights()
-	ensureVisible(&sb.folderCursor, &sb.folderScroll, fH, len(sb.folderItems))
+	ensureVisible(&sb.folderCursor, &sb.folderScroll, viewHeight(fH, len(sb.folderItems)), len(sb.folderItems))
 }
 
 func (sb *Sidebar) ensureRecentVisible() {
 	_, rH := sb.sectionHeights()
-	ensureVisible(&sb.recentCursor, &sb.recentScroll, rH, len(sb.recentItems))
+	ensureVisible(&sb.recentCursor, &sb.recentScroll, viewHeight(rH, len(sb.recentItems)), len(sb.recentItems))
 }
 
 func ensureVisible(cursor, scroll *int, height, total int) {
@@ -416,6 +427,11 @@ func (sb *Sidebar) nameMaxForItem(si sidebarItem) int {
 			overhead += 2 // indent
 		}
 		overhead += lipgloss.Width(hDimStyle.Render("·") + " ")
+		ts := formatTimestamp(si.createdAt)
+		tsW := timestampWidth(ts)
+		if tsW > 0 && width-overhead-tsW >= 3 {
+			overhead += tsW
+		}
 	}
 	nameMax := width - overhead
 	if nameMax < 1 {
@@ -807,11 +823,12 @@ func (sb *Sidebar) rebuildFiltered(query string) {
 			if strings.Contains(strings.ToLower(e.Name), query) ||
 				strings.Contains(strings.ToLower(e.Query), query) {
 				matchingEntries = append(matchingEntries, sidebarItem{
-					kind:     kindEntry,
-					name:     e.Name,
-					folder:   f.Name,
-					entryID:  e.ID,
-					endpoint: e.Endpoint,
+					kind:      kindEntry,
+					name:      e.Name,
+					folder:    f.Name,
+					entryID:   e.ID,
+					endpoint:  e.Endpoint,
+					createdAt: e.CreatedAt,
 				})
 			}
 		}
@@ -837,11 +854,12 @@ func (sb *Sidebar) rebuildFiltered(query string) {
 		if strings.Contains(strings.ToLower(e.Name), query) ||
 			strings.Contains(strings.ToLower(e.Query), query) {
 			sb.recentItems = append(sb.recentItems, sidebarItem{
-				kind:     kindEntry,
-				name:     e.Name,
-				folder:   "",
-				entryID:  e.ID,
-				endpoint: e.Endpoint,
+				kind:      kindEntry,
+				name:      e.Name,
+				folder:    "",
+				entryID:   e.ID,
+				endpoint:  e.Endpoint,
+				createdAt: e.CreatedAt,
 			})
 		}
 	}
@@ -907,7 +925,7 @@ func (sb Sidebar) View() string {
 }
 
 func (sb Sidebar) renderSection(items []sidebarItem, cursor, scroll, height int, active bool) string {
-	if height <= 0 {
+	if height <= 0 || len(items) == 0 {
 		return ""
 	}
 
@@ -916,11 +934,13 @@ func (sb Sidebar) renderSection(items []sidebarItem, cursor, scroll, height int,
 		width = 4
 	}
 
-	var lines []string
-	end := scroll + height
+	vH := viewHeight(height, len(items))
+	end := scroll + vH
 	if end > len(items) {
 		end = len(items)
 	}
+
+	var lines []string
 	for i := scroll; i < end; i++ {
 		isSelected := active && i == cursor
 		scrollOffset := 0
@@ -930,6 +950,23 @@ func (sb Sidebar) renderSection(items []sidebarItem, cursor, scroll, height int,
 		line := sb.renderItem(items[i], isSelected, width, scrollOffset)
 		lines = append(lines, line)
 	}
+
+	// Show scroll indicator when items are hidden
+	if len(items) > height {
+		above := scroll
+		below := len(items) - end
+		var indicator string
+		if above > 0 && below > 0 {
+			indicator = fmt.Sprintf("▲%d ▼%d", above, below)
+		} else if above > 0 {
+			indicator = fmt.Sprintf("▲%d more", above)
+		} else {
+			indicator = fmt.Sprintf("▼%d more", below)
+		}
+		styled := hDimStyle.Render(indicator)
+		lines = append(lines, lipgloss.NewStyle().Width(width).MaxWidth(width).Align(lipgloss.Center).Render(styled))
+	}
+
 	return strings.Join(lines, "\n")
 }
 

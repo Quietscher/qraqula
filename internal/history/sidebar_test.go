@@ -1,6 +1,7 @@
 package history
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -986,5 +987,76 @@ func TestSeparatorFitsWidth(t *testing.T) {
 		if sepWidth > width {
 			t.Errorf("separator width %d exceeds panel width %d", sepWidth, width)
 		}
+	}
+}
+
+func TestScrollIndicatorShownWhenItemsExceedHeight(t *testing.T) {
+	store := testStore(t)
+
+	// Add 10 unsorted entries
+	for i := 0; i < 10; i++ {
+		e := Entry{ID: GenerateID(), Name: "E" + string(rune('A'+i)), Query: "{ q }", CreatedAt: time.Now()}
+		_ = store.AddEntry(e)
+	}
+
+	sb := NewSidebar(store)
+	// height=5 but 10 items → needs scrolling
+	sb.SetSize(30, 5)
+
+	view := sb.View()
+	if !strings.Contains(view, "▼") {
+		t.Errorf("expected scroll indicator ▼ when items exceed height, got:\n%s", view)
+	}
+}
+
+func TestScrollIndicatorNotShownWhenAllFit(t *testing.T) {
+	store := testStore(t)
+
+	e := Entry{ID: GenerateID(), Name: "Only", Query: "{ q }", CreatedAt: time.Now()}
+	_ = store.AddEntry(e)
+
+	sb := NewSidebar(store)
+	sb.SetSize(30, 20)
+
+	view := sb.View()
+	if strings.Contains(view, "▼") || strings.Contains(view, "▲") {
+		t.Errorf("expected no scroll indicators when all items fit, got:\n%s", view)
+	}
+}
+
+func TestScrollIndicatorShowsAboveAfterScrollDown(t *testing.T) {
+	store := testStore(t)
+
+	for i := 0; i < 10; i++ {
+		e := Entry{ID: GenerateID(), Name: "E" + string(rune('A'+i)), Query: "{ q }", CreatedAt: time.Now()}
+		_ = store.AddEntry(e)
+	}
+
+	sb := NewSidebar(store)
+	sb.SetSize(30, 5)
+
+	// Navigate down past visible area
+	for i := 0; i < 6; i++ {
+		sb, _ = sb.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
+	}
+
+	view := sb.View()
+	if !strings.Contains(view, "▲") {
+		t.Errorf("expected ▲ indicator after scrolling down, got:\n%s", view)
+	}
+}
+
+func TestViewHeightReservesLineForIndicator(t *testing.T) {
+	// When items > height, viewHeight should be height-1
+	if got := viewHeight(5, 10); got != 4 {
+		t.Errorf("expected viewHeight(5,10)=4, got %d", got)
+	}
+	// When items <= height, viewHeight should be height
+	if got := viewHeight(5, 3); got != 5 {
+		t.Errorf("expected viewHeight(5,3)=5, got %d", got)
+	}
+	// Edge case: height=1 should not go to 0
+	if got := viewHeight(1, 5); got != 1 {
+		t.Errorf("expected viewHeight(1,5)=1, got %d", got)
 	}
 }
