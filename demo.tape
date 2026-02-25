@@ -29,7 +29,7 @@ Sleep 300ms
 Ctrl+R
 Sleep 4s
 
-# --- 3. Write a query with syntax highlighting ---
+# --- 3. Write a query (editor is already in insert mode) ---
 Type "{"
 Enter
 Type "  countries {"
@@ -51,23 +51,13 @@ Sleep 600ms
 Alt+Enter
 Sleep 4s
 
-# --- 5. Search results ---
+# --- 5. Browse results (fold/unfold) ---
 Ctrl+L
 Sleep 400ms
-Type "/"
-Sleep 300ms
-Type "Germany"
-Sleep 600ms
-# Navigate matches
-Type "n"
-Sleep 400ms
-Type "n"
-Sleep 400ms
-# Exit search
-Escape
-Sleep 500ms
-
-# --- 6. Browse results (fold/unfold) ---
+Type "j"
+Sleep 150ms
+Type "j"
+Sleep 150ms
 Type "j"
 Sleep 150ms
 Type "j"
@@ -91,7 +81,7 @@ Sleep 150ms
 Type "l"
 Sleep 600ms
 
-# --- 7. Switch to schema browser ---
+# --- 6. Switch to schema browser ---
 Ctrl+D
 Sleep 500ms
 
@@ -125,7 +115,7 @@ Sleep 300ms
 Type "h"
 Sleep 500ms
 
-# --- 8. History sidebar with timestamps ---
+# --- 7. History sidebar (already visible after auto-save) ---
 # Tab from schema browser to history panel
 Tab
 Sleep 500ms
@@ -137,7 +127,16 @@ Sleep 600ms
 # Rename the new folder
 Type "r"
 Sleep 400ms
-Backspace 10
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
+Backspace
 Type "Favorites"
 Enter
 Sleep 600ms
@@ -148,66 +147,11 @@ Sleep 300ms
 Type "m"
 Sleep 800ms
 
-# --- 9. Run a second query to show timestamps and history ---
-Ctrl+J
-Sleep 300ms
-Escape
-Type "ggVGd"
-Sleep 200ms
-Type "i"
-Type "{ continents { name code } }"
-Sleep 500ms
-Alt+Enter
-Sleep 4s
-
-# Show sidebar with multiple entries + timestamps
-Ctrl+H
-Sleep 1s
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
-Type "k"
-Sleep 500ms
-
-# --- 10. Delete folder with confirmation ---
-# Navigate to folder
-Type "k"
-Sleep 300ms
-# Press d to delete — shows confirmation
-Type "d"
-Sleep 800ms
-# Cancel with n
-Type "n"
-Sleep 600ms
-
-# Close sidebar
+# Close sidebar (focus returns to editor)
 Ctrl+B
 Sleep 800ms
 
-# --- 11. Schema-aware linting ---
-# Write a query with invalid field
-Escape
-Type "ggVGd"
-Sleep 200ms
-Type "i"
-Type "{ countries { invalidField } }"
-Sleep 600ms
-# Linting shows error
-Alt+Enter
-Sleep 3s
-
-# Fix the query
-Escape
-Type "ggVGd"
-Sleep 200ms
-Type "i"
-Type "{ countries { name capital } }"
-Sleep 600ms
-Alt+Enter
-Sleep 4s
-
-# --- 12. Environment & Header management ---
+# --- 8. Environment & Header management ---
 Ctrl+E
 Sleep 800ms
 
