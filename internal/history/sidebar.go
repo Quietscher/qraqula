@@ -64,6 +64,12 @@ type Sidebar struct {
 	// Move mode: track folders auto-opened during move so we can re-close them
 	autoOpened map[string]bool
 
+	// Delete confirmation
+	confirming     bool
+	confirmName    string // folder name to delete
+	confirmIsEntry bool
+	confirmID      string // entry ID (for entries) or folder name
+
 	// Marquee scroll state
 	scroll *scrollState
 }
@@ -111,6 +117,7 @@ func (sb *Sidebar) Focus() {}
 
 // Blur exits filter mode and rename mode when the sidebar loses focus.
 func (sb *Sidebar) Blur() {
+	sb.cancelConfirm()
 	sb.cancelSearch()
 	sb.cancelRename()
 	sb.commitAutoOpened()
@@ -271,6 +278,9 @@ func (sb *Sidebar) findEntry(id string) *Entry {
 
 func (sb Sidebar) sectionHeights() (foldersH, recentH int) {
 	h := sb.height
+	if sb.confirming {
+		h -= 2
+	}
 	if sb.renaming {
 		h -= 2
 	}
@@ -529,6 +539,9 @@ func (sb Sidebar) Update(msg tea.Msg) (Sidebar, tea.Cmd) {
 	case scrollTickMsg:
 		return sb.handleScrollTick()
 	case tea.KeyPressMsg:
+		if sb.confirming {
+			return sb.updateConfirm(msg)
+		}
 		if sb.renaming {
 			return sb.updateRename(msg)
 		}
@@ -693,13 +706,41 @@ func (sb Sidebar) handleDelete() (Sidebar, tea.Cmd) {
 
 	switch si.kind {
 	case kindFolder:
-		_ = sb.store.DeleteFolder(si.name)
-		sb.Rebuild()
+		// Folders require confirmation
+		sb.confirming = true
+		sb.confirmName = si.name
+		sb.confirmIsEntry = false
+		sb.confirmID = si.name
+		return sb, nil
 	case kindEntry:
 		_ = sb.store.DeleteEntry(si.entryID)
 		sb.Rebuild()
 	}
 	return sb, func() tea.Msg { return SidebarUpdatedMsg{} }
+}
+
+func (sb Sidebar) updateConfirm(msg tea.KeyPressMsg) (Sidebar, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "enter":
+		if sb.confirmIsEntry {
+			_ = sb.store.DeleteEntry(sb.confirmID)
+		} else {
+			_ = sb.store.DeleteFolder(sb.confirmID)
+		}
+		sb.cancelConfirm()
+		sb.Rebuild()
+		return sb, func() tea.Msg { return SidebarUpdatedMsg{} }
+	default:
+		// Any other key cancels
+		sb.cancelConfirm()
+		return sb, nil
+	}
+}
+
+func (sb *Sidebar) cancelConfirm() {
+	sb.confirming = false
+	sb.confirmName = ""
+	sb.confirmID = ""
 }
 
 // --- Move ---
@@ -886,6 +927,11 @@ func (sb *Sidebar) commitAutoOpened() {
 func (sb Sidebar) View() string {
 	var parts []string
 
+	if sb.confirming {
+		prompt := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("Delete " + truncateVisual(sb.confirmName, sb.width-10) + "?")
+		hint := hDimStyle.Render("y/n")
+		parts = append(parts, prompt, hint)
+	}
 	if sb.renaming {
 		prompt := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("Rename:")
 		input := sb.renameInput.View()
