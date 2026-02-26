@@ -330,7 +330,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, keys.ToggleSearch):
 		if m.focus == PanelResults && m.rightPanelMode == modeResults {
 			m.results.ToggleSearch()
-			m.results.SetSize(m.rightW, m.contentH-2) // recalculate viewport height
+			m.results.SetSize(m.rightW-2, m.contentH-2) // recalculate viewport height
 			return *m, nil
 		}
 	}
@@ -621,11 +621,11 @@ func (m *Model) layoutPanels() {
 		m.midW = remaining / 2
 		m.rightW = remaining - m.midW
 
-		m.histSidebar.SetSize(m.sidebarW, m.contentH-2)
-		m.editor.SetSize(m.midW, m.editorH-2)
-		m.variables.SetSize(m.midW, m.varsH-2)
-		m.results.SetSize(m.rightW, m.contentH-2)
-		m.browser.SetSize(m.rightW, m.contentH-2)
+		m.histSidebar.SetSize(m.sidebarW-2, m.contentH-2)
+		m.editor.SetSize(m.midW-2, m.editorH-2)
+		m.variables.SetSize(m.midW-2, m.varsH-2)
+		m.results.SetSize(m.rightW-2, m.contentH-2)
+		m.browser.SetSize(m.rightW-2, m.contentH-2)
 	} else {
 		// Each panel border = 2 chars wide, 2 panels = 4
 		available := m.width - 4
@@ -636,10 +636,10 @@ func (m *Model) layoutPanels() {
 		m.leftW = available / 2
 		m.rightW = available - m.leftW
 
-		m.editor.SetSize(m.leftW, m.editorH-2)
-		m.variables.SetSize(m.leftW, m.varsH-2)
-		m.results.SetSize(m.rightW, m.contentH-2)
-		m.browser.SetSize(m.rightW, m.contentH-2)
+		m.editor.SetSize(m.leftW-2, m.editorH-2)
+		m.variables.SetSize(m.leftW-2, m.varsH-2)
+		m.results.SetSize(m.rightW-2, m.contentH-2)
+		m.browser.SetSize(m.rightW-2, m.contentH-2)
 	}
 
 	epW := m.width

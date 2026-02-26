@@ -3,6 +3,8 @@ package schema
 import (
 	"fmt"
 	"strings"
+
+	"charm.land/lipgloss/v2"
 )
 
 // browserItem implements list.DefaultItem for the schema browser.
@@ -36,6 +38,50 @@ func (i browserItem) Title() string       { return i.name }
 func (i browserItem) Description() string { return i.desc }
 func (i browserItem) FilterValue() string { return i.name + " " + i.desc }
 func (i browserItem) Drillable() bool     { return i.target != "" }
+
+// scrollableText returns the text that can be marquee-scrolled for this item.
+// For fields: "fieldName(args): " (the type is kept fixed).
+// For non-fields: the full name + description.
+func (i browserItem) scrollableText() string {
+	if i.fieldName != "" {
+		s := i.fieldName
+		if i.fieldArgs != "" {
+			s += i.fieldArgs
+		}
+		s += ": "
+		return s
+	}
+	// Non-field items: name + desc
+	s := i.name
+	if i.desc != "" {
+		s += "  " + i.desc
+	}
+	return s
+}
+
+// fixedSuffix returns the text that should always remain visible (not scrolled).
+// For fields: the type string. For non-fields: empty.
+func (i browserItem) fixedSuffix() string {
+	if i.fieldName != "" {
+		return i.fieldType
+	}
+	return ""
+}
+
+// scrollableWidth returns the available width for the scrollable portion
+// given the total content width (after prefix, before right-side badge/arrow).
+func (i browserItem) scrollableWidth(contentWidth int) int {
+	if i.fieldName == "" {
+		return contentWidth
+	}
+	// Reserve space for the colored type
+	typeW := lipgloss.Width(i.fieldType)
+	w := contentWidth - typeW
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
 
 // --- Page-building helpers ---
 

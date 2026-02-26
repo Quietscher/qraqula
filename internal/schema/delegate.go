@@ -48,11 +48,19 @@ var (
 	crumbSepStyle     = lipgloss.NewStyle().Faint(true).SetString(" › ")
 )
 
-// browserDelegate renders schema browser items with the vampire theme.
-type browserDelegate struct{}
+// browserScrollState holds the marquee state for the schema browser.
+type browserScrollState struct {
+	offset int
+	active bool
+}
 
-func newBrowserDelegate() browserDelegate {
-	return browserDelegate{}
+// browserDelegate renders schema browser items with the vampire theme.
+type browserDelegate struct {
+	scroll *browserScrollState
+}
+
+func newBrowserDelegate(scroll *browserScrollState) browserDelegate {
+	return browserDelegate{scroll: scroll}
 }
 
 func (d browserDelegate) Height() int  { return 1 }
@@ -77,48 +85,6 @@ func (d browserDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		prefix = normalPrefix.String()
 	}
 
-	// Cross-level search parent prefix
-	var mainText string
-	if bi.searchParent != "" {
-		mainText = searchParentStyle.Render(bi.searchParent) + searchSepStyle.String()
-	}
-
-	// Build the main text: color-coded for fields, plain for non-fields
-	if bi.fieldName != "" {
-		// Color-coded field rendering
-		if bi.deprecated {
-			mainText += dimTitleStyle.Render(bi.fieldName)
-		} else if isSelected {
-			mainText += selTitleStyle.Render(bi.fieldName)
-		} else {
-			mainText += titleStyle.Render(bi.fieldName)
-		}
-		if bi.fieldArgs != "" {
-			mainText += argsStyle.Render(bi.fieldArgs)
-		}
-		mainText += separatorStyle.Render(": ")
-		mainText += typeStyleFor(bi.fieldTypeKind).Render(bi.fieldType)
-	} else {
-		// Non-field items (type names, enum values, "implements X")
-		if bi.deprecated {
-			mainText += dimTitleStyle.Render(bi.name)
-		} else if isSelected {
-			mainText += selTitleStyle.Render(bi.name)
-		} else {
-			mainText += titleStyle.Render(bi.name)
-		}
-	}
-
-	// Inline description after name (subtle, space-permitting)
-	if bi.desc != "" && bi.fieldName == "" {
-		mainText += "  " + descStyle.Render(bi.desc)
-	}
-
-	// Dim note (deprecation reason)
-	if bi.dimNote != "" {
-		mainText += "  " + dimNoteStyle.Render(bi.dimNote)
-	}
-
 	// Right side: badge + arrow
 	var right string
 	if bi.badge != "" {
@@ -131,15 +97,174 @@ func (d browserDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		right += arrowStyle.Render("→")
 	}
 
+	prefixW := lipgloss.Width(prefix)
+	rightW := lipgloss.Width(right)
+	contentW := width - prefixW - rightW - 1 // 1 for gap
+	if contentW < 1 {
+		contentW = 1
+	}
+
+	// Cross-level search parent prefix
+	var parentPrefix string
+	if bi.searchParent != "" {
+		parentPrefix = searchParentStyle.Render(bi.searchParent) + searchSepStyle.String()
+		contentW -= lipgloss.Width(parentPrefix)
+		if contentW < 1 {
+			contentW = 1
+		}
+	}
+
+	var mainText string
+
+	if bi.fieldName != "" {
+		// Field item: keep the colored type always visible, truncate/marquee the name+args
+		typeStr := typeStyleFor(bi.fieldTypeKind).Render(bi.fieldType)
+		typeW := lipgloss.Width(typeStr)
+		scrollW := contentW - typeW
+		if scrollW < 1 {
+			scrollW = 1
+		}
+
+		// The scrollable part: "fieldName(args): "
+		scrollText := bi.fieldName
+		if bi.fieldArgs != "" {
+			scrollText += bi.fieldArgs
+		}
+		scrollText += ": "
+
+		var visibleScroll string
+		scrollOffset := 0
+		if isSelected && d.scroll != nil {
+			scrollOffset = d.scroll.offset
+		}
+		if isSelected && d.scroll != nil && d.scroll.active {
+			visibleScroll = marquee(scrollText, scrollW, scrollOffset)
+		} else {
+			visibleScroll = truncateVisual(scrollText, scrollW)
+		}
+
+		// Style the visible scroll portion: split into name, args, separator parts
+		styledScroll := d.styleFieldScroll(visibleScroll, bi, isSelected, scrollOffset)
+		// Pad scrollable portion to fixed width so the Type stays in place
+		scrollVisW := lipgloss.Width(styledScroll)
+		if scrollVisW < scrollW {
+			styledScroll += strings.Repeat(" ", scrollW-scrollVisW)
+		}
+		mainText = styledScroll + typeStr
+	} else {
+		// Non-field items: truncate/marquee the full text
+		scrollText := bi.scrollableText()
+
+		var visible string
+		scrollOffset := 0
+		if isSelected && d.scroll != nil {
+			scrollOffset = d.scroll.offset
+		}
+		if isSelected && d.scroll != nil && d.scroll.active {
+			visible = marquee(scrollText, contentW, scrollOffset)
+		} else {
+			visible = truncateVisual(scrollText, contentW)
+		}
+
+		// Style the visible text
+		nameLen := len([]rune(bi.name))
+		nameRemaining := nameLen - scrollOffset
+		if nameRemaining < 0 {
+			nameRemaining = 0
+		}
+		visRunes := []rune(visible)
+		if nameRemaining > len(visRunes) {
+			nameRemaining = len(visRunes)
+		}
+
+		namePart := string(visRunes[:nameRemaining])
+		descPart := string(visRunes[nameRemaining:])
+
+		if namePart != "" {
+			if bi.deprecated {
+				mainText = dimTitleStyle.Render(namePart)
+			} else if isSelected {
+				mainText = selTitleStyle.Render(namePart)
+			} else {
+				mainText = titleStyle.Render(namePart)
+			}
+		}
+		if descPart != "" {
+			mainText += descStyle.Render(descPart)
+		}
+	}
+
+	// Dim note (deprecation reason)
+	if bi.dimNote != "" {
+		mainText += "  " + dimNoteStyle.Render(bi.dimNote)
+	}
+
 	// Pad to push right content to edge
-	mainWidth := lipgloss.Width(prefix) + lipgloss.Width(mainText)
+	mainWidth := lipgloss.Width(prefix) + lipgloss.Width(parentPrefix) + lipgloss.Width(mainText)
 	rightWidth := lipgloss.Width(right)
 	gap := width - mainWidth - rightWidth
 	if gap < 1 {
 		gap = 1
 	}
 
-	fmt.Fprint(w, prefix+mainText+strings.Repeat(" ", gap)+right)
+	fmt.Fprint(w, prefix+parentPrefix+mainText+strings.Repeat(" ", gap)+right)
+}
+
+// styleFieldScroll applies correct styling to the visible portion of a field's
+// scrollable text (fieldName + args + ": "). It tracks which part of the original
+// text is visible based on the scroll offset.
+func (d browserDelegate) styleFieldScroll(visible string, bi browserItem, isSelected bool, offset int) string {
+	visRunes := []rune(visible)
+	nameLen := len([]rune(bi.fieldName))
+	argsLen := len([]rune(bi.fieldArgs))
+	sepLen := 2 // ": "
+
+	// Calculate remaining characters of each part at current offset
+	nameRemaining := nameLen - offset
+	if nameRemaining < 0 {
+		nameRemaining = 0
+	}
+	argsRemaining := nameLen + argsLen - offset
+	if argsRemaining < 0 {
+		argsRemaining = 0
+	}
+	argsStart := nameRemaining
+	sepStart := argsRemaining
+	if argsStart > len(visRunes) {
+		argsStart = len(visRunes)
+	}
+	if sepStart > len(visRunes) {
+		sepStart = len(visRunes)
+	}
+	_ = sepLen // used conceptually
+
+	var result string
+
+	// Name part
+	if argsStart > 0 {
+		namePart := string(visRunes[:argsStart])
+		if bi.deprecated {
+			result += dimTitleStyle.Render(namePart)
+		} else if isSelected {
+			result += selTitleStyle.Render(namePart)
+		} else {
+			result += titleStyle.Render(namePart)
+		}
+	}
+
+	// Args part
+	if sepStart > argsStart {
+		argsPart := string(visRunes[argsStart:sepStart])
+		result += argsStyle.Render(argsPart)
+	}
+
+	// Separator part
+	if sepStart < len(visRunes) {
+		sepPart := string(visRunes[sepStart:])
+		result += separatorStyle.Render(sepPart)
+	}
+
+	return result
 }
 
 // typeStyleFor returns a color style for a field's return type based on its kind.
@@ -175,6 +300,68 @@ func badgeFor(kind string) lipgloss.Style {
 	default:
 		return lipgloss.NewStyle().Faint(true)
 	}
+}
+
+// contentWidthFor returns the available content width for an item's main text,
+// accounting for the prefix bar, right-side badge/arrow, and gap.
+func contentWidthFor(bi browserItem, totalWidth int) int {
+	prefixW := lipgloss.Width(selectedBar.String()) // same width whether selected or not
+	var rightW int
+	if bi.badge != "" {
+		rightW += lipgloss.Width(badgeFor(bi.badge).Render(bi.badge))
+	}
+	if bi.Drillable() {
+		if rightW > 0 {
+			rightW++ // space
+		}
+		rightW += lipgloss.Width(arrowStyle.Render("→"))
+	}
+	if bi.searchParent != "" {
+		rightW += lipgloss.Width(searchParentStyle.Render(bi.searchParent) + searchSepStyle.String())
+	}
+	w := totalWidth - prefixW - rightW - 1
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// truncateVisual cuts a string to fit within maxWidth visible chars, adding … if needed.
+func truncateVisual(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	runes := []rune(s)
+	for i := len(runes) - 1; i >= 0; i-- {
+		candidate := string(runes[:i]) + "…"
+		if lipgloss.Width(candidate) <= maxWidth {
+			return candidate
+		}
+	}
+	return "…"
+}
+
+// marquee returns a sliding window of a string at the given rune offset.
+func marquee(s string, maxWidth, offset int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	runes := []rune(s)
+	if offset >= len(runes) {
+		offset = 0
+	}
+	sub := runes[offset:]
+	candidate := string(sub)
+	if lipgloss.Width(candidate) <= maxWidth {
+		return candidate
+	}
+	return truncateVisual(candidate, maxWidth)
 }
 
 // renderBreadcrumbs renders the navigation breadcrumb bar.

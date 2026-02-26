@@ -9,21 +9,21 @@ import (
 )
 
 func TestDelegateHeight(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	if d.Height() != 1 {
 		t.Errorf("expected height 1, got %d", d.Height())
 	}
 }
 
 func TestDelegateSpacing(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	if d.Spacing() != 0 {
 		t.Errorf("expected spacing 0, got %d", d.Spacing())
 	}
 }
 
 func TestDelegateRenderNormalItem(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{name: "user(id: ID!): User", desc: "Get a user by ID", target: "User"},
 	}
@@ -38,7 +38,7 @@ func TestDelegateRenderNormalItem(t *testing.T) {
 }
 
 func TestDelegateRenderDrillableArrow(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{name: "User", target: "User", badge: "OBJECT"},
 	}
@@ -53,7 +53,7 @@ func TestDelegateRenderDrillableArrow(t *testing.T) {
 }
 
 func TestDelegateRenderBadge(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{name: "Query", badge: "OBJECT", target: "Query"},
 	}
@@ -68,7 +68,7 @@ func TestDelegateRenderBadge(t *testing.T) {
 }
 
 func TestDelegateRenderDeprecated(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{name: "oldName: String", deprecated: true, dimNote: "deprecated: use name"},
 	}
@@ -83,7 +83,7 @@ func TestDelegateRenderDeprecated(t *testing.T) {
 }
 
 func TestDelegateRenderColorCodedField(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{
 			name:          "user(id: ID!): User",
@@ -137,7 +137,7 @@ func TestRenderBreadcrumbsSinglePage(t *testing.T) {
 }
 
 func TestDelegateRenderSearchParentPrefix(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{
 			name:         "email",
@@ -163,7 +163,7 @@ func TestDelegateRenderSearchParentPrefix(t *testing.T) {
 }
 
 func TestDelegateRenderSearchParentFieldItem(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{
 			name:          "user(id: ID!): User",
@@ -193,7 +193,7 @@ func TestDelegateRenderSearchParentFieldItem(t *testing.T) {
 }
 
 func TestDelegateRenderNoSearchParent(t *testing.T) {
-	d := newBrowserDelegate()
+	d := newBrowserDelegate(&browserScrollState{})
 	items := []list.Item{
 		browserItem{name: "Query", badge: "OBJECT", target: "Query"},
 	}

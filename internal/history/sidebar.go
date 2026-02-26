@@ -121,6 +121,7 @@ func (sb *Sidebar) Blur() {
 	sb.cancelSearch()
 	sb.cancelRename()
 	sb.commitAutoOpened()
+	sb.resetScrollState()
 }
 
 // ItemCount returns the total number of items across both sections.
@@ -437,11 +438,6 @@ func (sb *Sidebar) nameMaxForItem(si sidebarItem) int {
 			overhead += 2 // indent
 		}
 		overhead += lipgloss.Width(hDimStyle.Render("·") + " ")
-		ts := formatTimestamp(si.createdAt)
-		tsW := timestampWidth(ts)
-		if tsW > 0 && width-overhead-tsW >= 3 {
-			overhead += tsW
-		}
 	}
 	nameMax := width - overhead
 	if nameMax < 1 {
@@ -487,13 +483,17 @@ func (sb Sidebar) handleScrollTick() (Sidebar, tea.Cmd) {
 	}
 
 	nameMax := sb.nameMaxForItem(*si)
-	if !needsScroll(si.name, nameMax) {
+	displayText := si.name
+	if si.kind == kindEntry {
+		displayText = entryDisplayText(*si)
+	}
+	if !needsScroll(displayText, nameMax) {
 		sb.scroll.active = false
 		return sb, nil
 	}
 
 	sb.scroll.active = true
-	runes := []rune(si.name)
+	runes := []rune(displayText)
 	sb.scroll.offset++
 	if sb.scroll.offset >= len(runes) {
 		sb.scroll.offset = 0
@@ -512,13 +512,17 @@ func (sb *Sidebar) handleManualScroll(key string) bool {
 	}
 
 	nameMax := sb.nameMaxForItem(*si)
-	if !needsScroll(si.name, nameMax) {
+	displayText := si.name
+	if si.kind == kindEntry {
+		displayText = entryDisplayText(*si)
+	}
+	if !needsScroll(displayText, nameMax) {
 		return false
 	}
 
 	sb.scroll.active = true
 	sb.scroll.paused = true
-	runes := []rune(si.name)
+	runes := []rune(displayText)
 	switch key {
 	case "left":
 		if sb.scroll.offset > 0 {
@@ -1024,7 +1028,7 @@ func (sb Sidebar) renderItem(si sidebarItem, selected bool, width, scrollOffset 
 	case kindEntry:
 		line = renderEntryLine(si, selected, width, scrollOffset)
 	}
-	return lipgloss.NewStyle().Width(width).MaxWidth(width).Render(line)
+	return lipgloss.NewStyle().MaxWidth(width).Render(line)
 }
 
 func (sb Sidebar) renderSectionSep() string {

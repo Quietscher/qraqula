@@ -146,12 +146,13 @@ func formatTimestamp(t time.Time) string {
 	return timeStr + " " + fmt.Sprintf("%02d.%02d.%d", t.Day(), int(t.Month()), t.Year())
 }
 
-// timestampWidth returns the visual width a timestamp would occupy (including leading space).
-func timestampWidth(ts string) int {
+// entryDisplayText returns the full display string for an entry (name + timestamp).
+func entryDisplayText(si sidebarItem) string {
+	ts := formatTimestamp(si.createdAt)
 	if ts == "" {
-		return 0
+		return si.name
 	}
-	return 1 + len(ts) // " " + timestamp
+	return si.name + " " + ts
 }
 
 // renderEntryLine renders an entry item as a single line.
@@ -180,33 +181,50 @@ func renderEntryLine(si sidebarItem, selected bool, width, scrollOffset int) str
 		availW = 1
 	}
 
-	// Determine if timestamp fits alongside the name (need at least 3 chars for name)
-	ts := formatTimestamp(si.createdAt)
-	tsW := timestampWidth(ts)
-	showTs := tsW > 0 && availW-tsW >= 3
+	// Build the full display text (name + timestamp) and marquee/truncate as one unit
+	full := entryDisplayText(si)
 
-	nameMax := availW
-	if showTs {
-		nameMax = availW - tsW
-	}
-
-	var name string
+	var visible string
 	if selected {
-		name = marquee(si.name, nameMax, scrollOffset)
+		visible = marquee(full, availW, scrollOffset)
 	} else {
-		name = truncateVisual(si.name, nameMax)
-	}
-	var nameStr string
-	if selected {
-		nameStr = hSelTitle.Render(name)
-	} else {
-		nameStr = hTitleStyle.Render(name)
+		visible = truncateVisual(full, availW)
 	}
 
-	var tsSuffix string
-	if showTs {
-		tsSuffix = " " + hDimStyle.Render(ts)
+	// Style: name part in white, timestamp part in dim
+	styled := styleEntryText(visible, len([]rune(si.name)), scrollOffset, selected)
+
+	return prefix + indent + bullet + styled
+}
+
+// styleEntryText applies name styling (white/bold) and timestamp styling (dim)
+// to the visible portion of an entry line. nameLen is the rune length of the
+// original name, and offset is the current marquee scroll offset into the full
+// "name timestamp" string.
+func styleEntryText(visible string, nameLen, offset int, selected bool) string {
+	visRunes := []rune(visible)
+	// How many runes of the name are still visible at this offset
+	nameRemaining := nameLen - offset
+	if nameRemaining < 0 {
+		nameRemaining = 0
+	}
+	if nameRemaining > len(visRunes) {
+		nameRemaining = len(visRunes)
 	}
 
-	return prefix + indent + bullet + nameStr + tsSuffix
+	namePart := string(visRunes[:nameRemaining])
+	tsPart := string(visRunes[nameRemaining:])
+
+	var result string
+	if namePart != "" {
+		if selected {
+			result = hSelTitle.Render(namePart)
+		} else {
+			result = hTitleStyle.Render(namePart)
+		}
+	}
+	if tsPart != "" {
+		result += hDimStyle.Render(tsPart)
+	}
+	return result
 }

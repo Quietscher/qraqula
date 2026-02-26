@@ -1,10 +1,20 @@
 package schema
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+const (
+	browserScrollDelay    = 800 * time.Millisecond
+	browserScrollInterval = 150 * time.Millisecond
+)
+
+// browserScrollTickMsg advances the marquee scroll in the schema browser.
+type browserScrollTickMsg struct{}
 
 // page represents a single view in the browser navigation stack.
 type page struct {
@@ -28,11 +38,16 @@ type Browser struct {
 	// them. When filter mode ends we restore the original page items.
 	filterAugmented bool
 	pageItems       []browserItem // saved page items for restore after filtering
+
+	// Marquee scroll state
+	scroll       *browserScrollState
+	lastSelected int // track selection changes
 }
 
 // NewBrowser returns a Browser with no schema loaded.
 func NewBrowser() Browser {
-	delegate := newBrowserDelegate()
+	scroll := &browserScrollState{}
+	delegate := newBrowserDelegate(scroll)
 	l := list.New(nil, delegate, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(true)
@@ -63,7 +78,9 @@ func NewBrowser() Browser {
 	l.DisableQuitKeybindings()
 
 	return Browser{
-		list: l,
+		list:         l,
+		scroll:       scroll,
+		lastSelected: -1,
 	}
 }
 
@@ -104,16 +121,19 @@ func (b *Browser) SetSize(w, h int) {
 // Focus is a no-op for now.
 func (b *Browser) Focus() {}
 
-// Blur exits filter mode when the browser loses focus.
+// Blur exits filter mode and resets marquee when the browser loses focus.
 func (b *Browser) Blur() {
 	if b.list.SettingFilter() {
 		b.list.ResetFilter()
 	}
+	b.resetScrollState()
 }
 
 // Update handles key messages for navigation and search.
 func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 	switch msg := msg.(type) {
+	case browserScrollTickMsg:
+		return b.handleScrollTick()
 	case tea.KeyPressMsg:
 		// When filtering, let the list handle everything
 		if b.list.SettingFilter() {
@@ -171,6 +191,16 @@ func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 		cmd = b.augmentFilterItems(cmd)
 	}
 
+	// Detect selection change for marquee scroll
+	idx := b.list.Index()
+	if idx != b.lastSelected {
+		b.lastSelected = idx
+		b.scroll.offset = 0
+		b.scroll.active = false
+		scrollCmd := tea.Tick(browserScrollDelay, func(time.Time) tea.Msg { return browserScrollTickMsg{} })
+		cmd = tea.Batch(cmd, scrollCmd)
+	}
+
 	return b, cmd
 }
 
@@ -196,6 +226,38 @@ func (b Browser) View() string {
 		return crumbs + "\n" + b.list.View()
 	}
 	return b.list.View()
+}
+
+// handleScrollTick advances the marquee scroll for the selected item.
+func (b Browser) handleScrollTick() (Browser, tea.Cmd) {
+	if b.scroll == nil || b.list.SettingFilter() {
+		return b, nil
+	}
+	selected := b.list.SelectedItem()
+	if selected == nil {
+		return b, nil
+	}
+	bi, ok := selected.(browserItem)
+	if !ok {
+		return b, nil
+	}
+
+	width := b.list.Width() - 4
+	cw := contentWidthFor(bi, width)
+	scrollText := bi.scrollableText()
+	if scrollText == "" || lipgloss.Width(scrollText) <= bi.scrollableWidth(cw) {
+		b.scroll.active = false
+		return b, nil
+	}
+
+	b.scroll.active = true
+	runes := []rune(scrollText)
+	b.scroll.offset++
+	if b.scroll.offset >= len(runes) {
+		b.scroll.offset = 0
+		return b, tea.Tick(browserScrollDelay, func(time.Time) tea.Msg { return browserScrollTickMsg{} })
+	}
+	return b, tea.Tick(browserScrollInterval, func(time.Time) tea.Msg { return browserScrollTickMsg{} })
 }
 
 // --- internal helpers ---
@@ -239,6 +301,7 @@ func (b *Browser) drillIn() bool {
 		return false
 	}
 	b.resetFilterState()
+	b.resetScrollState()
 	if bi.target == targetVariableTypes {
 		b.pushVariableTypes()
 	} else {
@@ -253,9 +316,19 @@ func (b *Browser) goBack() bool {
 	}
 	b.stack = b.stack[:len(b.stack)-1]
 	b.resetFilterState()
+	b.resetScrollState()
 	b.syncList()
 	b.list.Select(0)
 	return true
+}
+
+// resetScrollState resets the marquee scroll state.
+func (b *Browser) resetScrollState() {
+	if b.scroll != nil {
+		b.scroll.offset = 0
+		b.scroll.active = false
+	}
+	b.lastSelected = -1
 }
 
 // resetFilterState clears filter augmentation and resets the list filter.
