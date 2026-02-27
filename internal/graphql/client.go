@@ -50,7 +50,13 @@ func (c *Client) Execute(ctx context.Context, endpoint string, req Request, head
 
 	var gqlResp Response
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		// Non-JSON response (HTML error page, plain text, etc.) — return raw body
+		return &Result{
+			RawBody:    respBody,
+			StatusCode: resp.StatusCode,
+			Duration:   duration,
+			Size:       len(respBody),
+		}, nil
 	}
 
 	return &Result{

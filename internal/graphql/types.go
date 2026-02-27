@@ -21,6 +21,7 @@ type Error struct {
 
 type Result struct {
 	Response   Response
+	RawBody    []byte // raw response body, set when JSON decode fails
 	StatusCode int
 	Duration   time.Duration
 	Size       int

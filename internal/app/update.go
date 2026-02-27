@@ -35,14 +35,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.querying = false
 		m.cancelQuery = nil
 		r := msg.Result
-		hasErrors := r.Response.HasErrors()
 
-		// Build display content with syntax highlighting
-		raw, _ := json.Marshal(r.Response)
-		if err := m.results.SetPrettyJSON(raw); err != nil {
-			m.results.SetContent(string(raw))
+		if r.RawBody != nil {
+			// Non-JSON response (auth error, HTML page, etc.) — show raw body
+			m.results.SetContent(string(r.RawBody))
+			m.statusbar.SetResult(r.StatusCode, r.Duration, r.Size, true)
+		} else {
+			hasErrors := r.Response.HasErrors()
+			// Build display content with syntax highlighting
+			raw, _ := json.Marshal(r.Response)
+			if err := m.results.SetPrettyJSON(raw); err != nil {
+				m.results.SetContent(string(raw))
+			}
+			m.statusbar.SetResult(r.StatusCode, r.Duration, r.Size, hasErrors)
 		}
-		m.statusbar.SetResult(r.StatusCode, r.Duration, r.Size, hasErrors)
 
 		// Auto-save to history
 		query := m.editor.Value()
