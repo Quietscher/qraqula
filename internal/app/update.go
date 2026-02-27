@@ -166,6 +166,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Route to overlay when open (for paste messages, etc.)
+	if m.overlay.IsOpen() {
+		var cmd tea.Cmd
+		m.overlay, cmd = m.overlay.Update(msg)
+		return m, cmd
+	}
+
 	// Forward to focused panel
 	cmds = append(cmds, m.updateFocused(msg)...)
 	return m, tea.Batch(cmds...)

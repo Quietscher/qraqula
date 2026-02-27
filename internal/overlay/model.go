@@ -282,9 +282,10 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 			m.mode = ModeEditValue
 			m.input.SetValue(h.Value)
 		}
-		m.input.Focus()
+		m.setInputWidth()
+		cmd := m.input.Focus()
 		m.input.CursorEnd()
-		return m, nil
+		return m, cmd
 	}
 	return m, nil
 }
@@ -298,8 +299,9 @@ func (m Model) handleNew() (Model, tea.Cmd) {
 		m.mode = ModeCreateEnv
 		m.input.SetValue("")
 		m.input.Placeholder = "name"
-		m.input.Focus()
-		return m, nil
+		m.setInputWidth()
+		cmd := m.input.Focus()
+		return m, cmd
 
 	case SectionHeaders, SectionGlobal:
 		return m.handleAddHeader()
@@ -329,8 +331,9 @@ func (m Model) handleAddHeader() (Model, tea.Cmd) {
 	m.mode = ModeEditKey
 	m.input.SetValue("")
 	m.input.Placeholder = "header key"
-	m.input.Focus()
-	return m, nil
+	m.setInputWidth()
+	cmd := m.input.Focus()
+	return m, cmd
 }
 
 func (m Model) handleDelete() (Model, tea.Cmd) {
@@ -388,9 +391,10 @@ func (m Model) startRenameEnv() (Model, tea.Cmd) {
 	}
 	m.mode = ModeRenameEnv
 	m.input.SetValue(m.config.Environments[m.envCursor].Name)
-	m.input.Focus()
+	m.setInputWidth()
+	cmd := m.input.Focus()
 	m.input.CursorEnd()
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) startEditEnvEndpoint() (Model, tea.Cmd) {
@@ -400,9 +404,10 @@ func (m Model) startEditEnvEndpoint() (Model, tea.Cmd) {
 	m.mode = ModeEditEnvEndpoint
 	m.input.SetValue(m.config.Environments[m.envCursor].Endpoint)
 	m.input.Placeholder = "https://api.example.com/graphql"
-	m.input.Focus()
+	m.setInputWidth()
+	cmd := m.input.Focus()
 	m.input.CursorEnd()
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) startEditEnvVars() (Model, tea.Cmd) {
@@ -412,9 +417,10 @@ func (m Model) startEditEnvVars() (Model, tea.Cmd) {
 	m.mode = ModeEditEnvVars
 	m.input.SetValue(m.config.Environments[m.envCursor].Variables)
 	m.input.Placeholder = `{"key": "value"}`
-	m.input.Focus()
+	m.setInputWidth()
+	cmd := m.input.Focus()
 	m.input.CursorEnd()
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) confirmEdit() (Model, tea.Cmd) {
@@ -470,8 +476,9 @@ func (m Model) confirmEdit() (Model, tea.Cmd) {
 		m.mode = ModeEditValue
 		m.input.SetValue("")
 		m.input.Placeholder = "header value"
-		m.input.Focus()
-		return m, m.emitChanged()
+		m.setInputWidth()
+		focusCmd := m.input.Focus()
+		return m, tea.Batch(m.emitChanged(), focusCmd)
 
 	case ModeEditValue:
 		m.mode = ModeNormal
@@ -612,6 +619,7 @@ func (m Model) renderContent() string {
 
 func (m Model) renderEnvSection() string {
 	var lines []string
+	cw := m.contentWidth()
 
 	title := "ENVIRONMENTS"
 	if m.section == SectionEnvs {
@@ -619,7 +627,7 @@ func (m Model) renderEnvSection() string {
 	} else {
 		lines = append(lines, sectionTitle.Render(title))
 	}
-	lines = append(lines, sepLine.Render(strings.Repeat("─", 40)))
+	lines = append(lines, sepLine.Render(strings.Repeat("─", cw)))
 
 	if m.config == nil || len(m.config.Environments) == 0 {
 		lines = append(lines, dimStyle.Render("  (no environments)"))
@@ -635,7 +643,12 @@ func (m Model) renderEnvSection() string {
 		}
 
 		name := env.Name
-		ep := dimStyle.Render(truncate(env.Endpoint, 40))
+		// Truncate endpoint to fill remaining width after marker + name + gap
+		epMax := cw - lipgloss.Width(marker) - lipgloss.Width(name) - 2
+		if epMax < 10 {
+			epMax = 10
+		}
+		ep := dimStyle.Render(truncate(env.Endpoint, epMax))
 
 		if m.section == SectionEnvs && i == m.envCursor {
 			line := marker + selectedStyle.Render(name) + "  " + ep
@@ -651,6 +664,7 @@ func (m Model) renderEnvSection() string {
 
 func (m Model) renderHeaderSection() string {
 	var lines []string
+	cw := m.contentWidth()
 
 	envName := "(none)"
 	if m.config.ActiveEnv != "" {
@@ -662,7 +676,7 @@ func (m Model) renderHeaderSection() string {
 	} else {
 		lines = append(lines, sectionTitle.Render(title))
 	}
-	lines = append(lines, sepLine.Render(strings.Repeat("─", 40)))
+	lines = append(lines, sepLine.Render(strings.Repeat("─", cw)))
 
 	env := m.config.ActiveEnvironment()
 	if env == nil {
@@ -684,6 +698,7 @@ func (m Model) renderHeaderSection() string {
 
 func (m Model) renderGlobalSection() string {
 	var lines []string
+	cw := m.contentWidth()
 
 	title := "GLOBAL HEADERS"
 	if m.section == SectionGlobal {
@@ -691,7 +706,7 @@ func (m Model) renderGlobalSection() string {
 	} else {
 		lines = append(lines, sectionTitle.Render(title))
 	}
-	lines = append(lines, sepLine.Render(strings.Repeat("─", 40)))
+	lines = append(lines, sepLine.Render(strings.Repeat("─", cw)))
 
 	if len(m.config.GlobalHeaders) == 0 {
 		lines = append(lines, dimStyle.Render("  (no global headers)"))
@@ -716,38 +731,60 @@ func (m Model) renderHeaderRow(idx int, h config.Header, isActiveSection bool) s
 	key := h.Key
 	val := h.Value
 
+	// Dynamic truncation: overhead is "  " + check + " " + key + "  " = ~8 + keyWidth
+	cw := m.contentWidth()
+	valMax := cw - 8 - lipgloss.Width(key)
+	if valMax < 10 {
+		valMax = 10
+	}
+
 	isSelected := isActiveSection && idx == m.hdrCursor
 	if isSelected {
 		if m.hdrCol == 0 {
 			key = selectedStyle.Render(key)
-			val = dimStyle.Render(truncate(val, 30))
+			val = dimStyle.Render(truncate(val, valMax))
 		} else {
 			key = normalStyle.Render(key)
-			val = selectedStyle.Render(truncate(val, 30))
+			val = selectedStyle.Render(truncate(val, valMax))
 		}
 		return fmt.Sprintf("  %s %s  %s", check, key, val)
 	}
 
-	return fmt.Sprintf("  %s %s  %s", check, normalStyle.Render(key), dimStyle.Render(truncate(val, 30)))
+	return fmt.Sprintf("  %s %s  %s", check, normalStyle.Render(key), dimStyle.Render(truncate(val, valMax)))
 }
 
 func (m Model) renderEditLine() string {
-	var label string
+	label := m.editLabel()
+	return sectionTitle.Render(label) + m.input.View()
+}
+
+// editLabel returns the label for the current edit mode.
+func (m Model) editLabel() string {
 	switch m.mode {
 	case ModeCreateEnv:
-		label = "New environment: "
+		return "New environment: "
 	case ModeRenameEnv:
-		label = "Rename: "
+		return "Rename: "
 	case ModeEditEnvEndpoint:
-		label = "Endpoint: "
+		return "Endpoint: "
 	case ModeEditEnvVars:
-		label = "Variables: "
+		return "Variables: "
 	case ModeEditKey:
-		label = "Key: "
+		return "Key: "
 	case ModeEditValue:
-		label = "Value: "
+		return "Value: "
 	}
-	return sectionTitle.Render(label) + m.input.View()
+	return ""
+}
+
+// setInputWidth sizes the text input to fill the available overlay width.
+func (m *Model) setInputWidth() {
+	cw := m.contentWidth()
+	w := cw - lipgloss.Width(m.editLabel())
+	if w < 10 {
+		w = 10
+	}
+	m.input.SetWidth(w)
 }
 
 func (m Model) renderHints() string {
@@ -759,6 +796,20 @@ func (m Model) renderHints() string {
 		hints = []string{"tab section", "j/k nav", "h/l col", "↵ edit", "a/n add", "d del", "space toggle", "esc close"}
 	}
 	return hintStyle.Render(strings.Join(hints, "  "))
+}
+
+// contentWidth returns the usable text width inside the overlay.
+func (m Model) contentWidth() int {
+	overlayW := m.width * 4 / 5
+	if overlayW < 40 {
+		overlayW = 40
+	}
+	// Width(overlayW-4) sets outer width; border takes 2, padding(1,2) takes 4 horizontal
+	cw := overlayW - 10
+	if cw < 20 {
+		cw = 20
+	}
+	return cw
 }
 
 func truncate(s string, maxW int) string {
