@@ -96,7 +96,7 @@ type Model struct {
 
 func New() Model {
 	ti := textinput.New()
-	ti.CharLimit = 500
+	ti.CharLimit = 0 // no limit — auth tokens can be very long
 	return Model{input: ti}
 }
 
