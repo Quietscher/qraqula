@@ -9,7 +9,7 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 ## Features
 
 - **Query editor** with vim keybindings and GraphQL syntax highlighting
-- **Schema introspection browser** — automatic introspection on connect, drill-down navigation, cross-level search
+- **Schema introspection browser** — automatic introspection on connect, drill-down navigation, cross-level search, query generation from fields
 - **Result viewer** with syntax-highlighted JSON, scrolling, and search
 - **Variables panel** with JSON syntax highlighting and validation
 - **External editor** — open query or variables in `$EDITOR` with `Ctrl+O`
@@ -74,6 +74,8 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `j` / `k` | Navigate up/down |
 | `l` / `Enter` | Drill into type |
 | `h` / `Backspace` | Go back |
+| `g` | Generate bare query body from selected field |
+| `G` | Generate full operation with variables from selected field |
 | `/` | Search (cross-level) |
 | `Esc` | Clear search |
 
