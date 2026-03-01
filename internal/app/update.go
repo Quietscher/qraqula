@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -247,6 +248,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			return *m, nil
 		}
 		return *m, tea.Batch(tea.SetClipboard(content), m.setTimedInfo("Copied to clipboard"))
+
+	case key.Matches(msg, keys.SaveResult):
+		content := m.results.Content()
+		if content == "" {
+			return *m, m.setTimedInfo("No result to save")
+		}
+		name := history.EntryNameFromQuery(m.editor.Value())
+		filename := name + "-" + time.Now().Format("20060102-150405") + ".json"
+		home, _ := os.UserHomeDir()
+		path := filepath.Join(home, "Downloads", filename)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			return *m, m.setTimedError("Save failed: " + err.Error())
+		}
+		return *m, m.setTimedInfo("Saved to ~/Downloads/" + filename)
 
 	// Enter to start editing in query/variables panels
 	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():

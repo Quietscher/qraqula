@@ -23,6 +23,7 @@ type keyMap struct {
 	ToggleSearch  key.Binding
 	Prettify      key.Binding
 	Copy          key.Binding
+	SaveResult    key.Binding
 }
 
 var keys = keyMap{
@@ -97,5 +98,9 @@ var keys = keyMap{
 	Copy: key.NewBinding(
 		key.WithKeys("ctrl+y"),
 		key.WithHelp("^y", "copy"),
+	),
+	SaveResult: key.NewBinding(
+		key.WithKeys("ctrl+s"),
+		key.WithHelp("^s", "save"),
 	),
 }
