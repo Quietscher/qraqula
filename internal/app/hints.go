@@ -54,6 +54,7 @@ var schemaBrowserHints = []statusbar.Hint{
 	{Key: "j/k/↑↓", Label: "navigate"},
 	{Key: "l/↵", Label: "drill in"},
 	{Key: "h/⌫", Label: "back"},
+	{Key: "g", Label: "generate"},
 	{Key: "/", Label: "filter"},
 	{Key: "esc", Label: "clear"},
 	{Key: "^d", Label: "results"},

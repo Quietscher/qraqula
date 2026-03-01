@@ -169,6 +169,11 @@ func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 
 		// Handle drill-in/back before the list processes the key
 		switch msg.String() {
+		case "g":
+			if msg := b.generateFromSelection(); msg != nil {
+				m := *msg
+				return b, func() tea.Msg { return m }
+			}
 		case "l", "enter", "right":
 			if b.drillIn() {
 				return b, nil
@@ -427,4 +432,64 @@ func (b *Browser) pushType(name string) {
 	b.stack = append(b.stack, page{title: title, items: items})
 	b.syncList()
 	b.list.Select(0)
+}
+
+// generateFromSelection checks if the current selection is a field on a root
+// operation type and generates a full GraphQL query for it.
+func (b *Browser) generateFromSelection() *GenerateQueryMsg {
+	if b.schema == nil || len(b.stack) < 2 {
+		return nil
+	}
+
+	// Only generate when viewing root type fields (depth == 2)
+	if len(b.stack) != 2 {
+		return nil
+	}
+
+	rootTypeName := b.stack[1].title
+
+	// Determine the operation type
+	opType := ""
+	if b.schema.QueryType != nil && b.schema.QueryType.Name != nil && *b.schema.QueryType.Name == rootTypeName {
+		opType = "query"
+	} else if b.schema.MutationType != nil && b.schema.MutationType.Name != nil && *b.schema.MutationType.Name == rootTypeName {
+		opType = "mutation"
+	} else if b.schema.SubscriptionType != nil && b.schema.SubscriptionType.Name != nil && *b.schema.SubscriptionType.Name == rootTypeName {
+		opType = "subscription"
+	}
+	if opType == "" {
+		return nil
+	}
+
+	// Get the selected item
+	selected := b.list.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	bi, ok := selected.(browserItem)
+	if !ok || bi.fieldName == "" {
+		return nil
+	}
+
+	// Look up the actual Field on the root type
+	rootType := b.schema.TypeByName(rootTypeName)
+	if rootType == nil {
+		return nil
+	}
+	var field *Field
+	for i := range rootType.Fields {
+		if rootType.Fields[i].Name == bi.fieldName {
+			field = &rootType.Fields[i]
+			break
+		}
+	}
+	if field == nil {
+		return nil
+	}
+
+	query, vars := GenerateQuery(b.schema, opType, rootTypeName, *field)
+	return &GenerateQueryMsg{
+		Query:     query,
+		Variables: vars,
+	}
 }

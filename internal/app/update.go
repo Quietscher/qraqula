@@ -101,6 +101,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SchemaFetchErrorMsg:
 		return m, m.setTimedError("Schema fetch failed: " + msg.Err.Error())
 
+	case schema.GenerateQueryMsg:
+		m.editor.SetValue(msg.Query)
+		m.variables.SetValue(msg.Variables)
+		m.rightPanelMode = modeResults
+		m.setFocus(PanelEditor)
+		return m, m.setTimedInfo("Query generated from schema")
+
 	case history.LoadEntryMsg:
 		m.editor.SetValue(msg.Entry.Query)
 		m.variables.SetValue(msg.Entry.Variables)
@@ -486,6 +493,7 @@ func (m *Model) executeQuery() (Model, tea.Cmd) {
 	}
 
 	m.querying = true
+	m.rightPanelMode = modeResults
 	m.statusbar.SetLoading()
 
 	ctx, cancel := context.WithCancel(context.Background())
