@@ -76,7 +76,8 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `h` / `Backspace` | Go back |
 | `g` | Generate bare query body from selected field |
 | `G` | Generate full operation with variables from selected field |
-| `/` | Search (cross-level) |
+| `v` | View field arguments |
+| `/` | Search (cross-level, includes variable types) |
 | `Esc` | Clear search |
 
 ### History Sidebar
