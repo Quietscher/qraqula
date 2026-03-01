@@ -4,7 +4,7 @@ A terminal-based GraphQL client. Query, explore schemas, and manage results — 
 
 Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-![qraqula demo](demo.gif)
+![qraqula demo](docs/demos/overview.gif)
 
 ## Features
 
@@ -79,6 +79,13 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `v` | View field arguments |
 | `/` | Search (cross-level, includes variable types) |
 | `Esc` | Clear search |
+
+<details>
+<summary>Query generation demo</summary>
+
+![Generate query demo](docs/demos/generate-query.gif)
+
+</details>
 
 ### History Sidebar
 
