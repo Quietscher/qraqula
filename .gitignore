@@ -39,9 +39,9 @@ docs/plans/
 # Debug
 __debug_bin*
 
-# VHS output (except demo.gif for README)
+# VHS output (keep docs/demos/)
 *.gif
-!demo.gif
+!docs/demos/*.gif
 
 # Claude Code
 CLAUDE.md
