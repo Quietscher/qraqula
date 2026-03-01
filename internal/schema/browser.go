@@ -179,6 +179,10 @@ func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 				m := *msg
 				return b, func() tea.Msg { return m }
 			}
+		case "v":
+			if b.pushArgsPage() {
+				return b, nil
+			}
 		case "l", "enter", "right":
 			if b.drillIn() {
 				return b, nil
@@ -380,8 +384,12 @@ func (b *Browser) augmentFilterItems(existing tea.Cmd) tea.Cmd {
 		}
 		item := si.item
 		item.searchParent = si.parentName
-		// Cross-level items navigate to their parent type when selected
-		item.target = si.parentName
+		// For field-level items (parentKind set), navigate to the parent type.
+		// For type-level items (parentKind empty, e.g. variable types),
+		// keep the original target so selecting navigates to the type itself.
+		if si.parentKind != "" {
+			item.target = si.parentName
+		}
 		crossLevel = append(crossLevel, item)
 	}
 
@@ -437,6 +445,62 @@ func (b *Browser) pushType(name string) {
 	b.stack = append(b.stack, page{title: title, items: items})
 	b.syncList()
 	b.list.Select(0)
+}
+
+// pushArgsPage pushes a page showing the arguments of the currently selected
+// field. Returns true if a page was pushed.
+func (b *Browser) pushArgsPage() bool {
+	if b.schema == nil || len(b.stack) < 2 {
+		return false
+	}
+
+	selected := b.list.SelectedItem()
+	if selected == nil {
+		return false
+	}
+	bi, ok := selected.(browserItem)
+	if !ok || bi.fieldName == "" {
+		return false
+	}
+
+	// Find the field in the current page's parent type
+	parentTypeName := b.stack[len(b.stack)-1].title
+	parentType := b.schema.TypeByName(parentTypeName)
+	if parentType == nil {
+		return false
+	}
+	var field *Field
+	for i := range parentType.Fields {
+		if parentType.Fields[i].Name == bi.fieldName {
+			field = &parentType.Fields[i]
+			break
+		}
+	}
+	if field == nil || len(field.Args) == 0 {
+		return false
+	}
+
+	// Build items for each argument
+	var items []browserItem
+	for _, arg := range field.Args {
+		named := arg.Type.NamedType()
+		target := ""
+		if isDrillable(b.schema, named) {
+			target = named
+		}
+		items = append(items, browserItem{
+			name:   arg.Name + ": " + arg.Type.DisplayName(),
+			desc:   arg.Description,
+			target: target,
+		})
+	}
+
+	b.resetFilterState()
+	b.resetScrollState()
+	b.stack = append(b.stack, page{title: field.Name + " args", items: items})
+	b.syncList()
+	b.list.Select(0)
+	return true
 }
 
 // selectedField resolves the currently selected browser item to a root-type

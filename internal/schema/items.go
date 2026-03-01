@@ -315,6 +315,16 @@ func allSearchableItems(s *Schema) []searchableItem {
 				})
 			}
 		case "ENUM":
+			// Add the type itself as a searchable item
+			result = append(result, searchableItem{
+				item: browserItem{
+					name:   t.Name,
+					badge:  t.Kind,
+					target: t.Name,
+					desc:   fmt.Sprintf("%d values", len(t.EnumValues)),
+				},
+				parentName: "Variable Types",
+			})
 			for _, ev := range t.EnumValues {
 				result = append(result, searchableItem{
 					item: browserItem{
@@ -328,6 +338,16 @@ func allSearchableItems(s *Schema) []searchableItem {
 				})
 			}
 		case "INPUT_OBJECT":
+			// Add the type itself as a searchable item
+			result = append(result, searchableItem{
+				item: browserItem{
+					name:   t.Name,
+					badge:  t.Kind,
+					target: t.Name,
+					desc:   fmt.Sprintf("%d fields", len(t.InputFields)),
+				},
+				parentName: "Variable Types",
+			})
 			for _, iv := range t.InputFields {
 				named := iv.Type.NamedType()
 				target := ""
