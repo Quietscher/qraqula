@@ -19,6 +19,22 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 - **Environments & headers** — named environments (dev/staging/prod) with endpoint, headers, and variables; global headers; cycle between envs
 - **Status bar** with response metadata (status code, response time, size)
 
+## Demos
+
+<details>
+<summary>Overview</summary>
+
+![Overview demo](docs/demos/overview.gif)
+
+</details>
+
+<details>
+<summary>Query generation from schema</summary>
+
+![Generate query demo](docs/demos/generate-query.gif)
+
+</details>
+
 ## Install
 
 ### Homebrew
@@ -79,13 +95,6 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `v` | View field arguments |
 | `/` | Search (cross-level, includes variable types) |
 | `Esc` | Clear search |
-
-<details>
-<summary>Query generation demo</summary>
-
-![Generate query demo](docs/demos/generate-query.gif)
-
-</details>
 
 ### History Sidebar
 
