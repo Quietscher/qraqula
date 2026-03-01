@@ -7,17 +7,17 @@ import (
 	"github.com/qraqula/qla/internal/format"
 )
 
-// GenerateQueryMsg is sent when the user presses 'g' in the schema browser
-// to generate a query from the selected field.
+// GenerateQueryMsg is sent when the user generates a query from the schema browser.
+// When WithVariables is true, the variables panel is also populated.
 type GenerateQueryMsg struct {
 	Query     string
 	Variables string
 }
 
-// GenerateQuery builds a complete GraphQL operation string and example variables
-// JSON for the given root-level field. opType is "query", "mutation", or
-// "subscription".
-func GenerateQuery(s *Schema, opType, rootTypeName string, field Field) (query, variables string) {
+// GenerateQuery builds a complete GraphQL operation string with variable
+// declarations and example variable values. opType is "query", "mutation",
+// or "subscription".
+func GenerateQuery(s *Schema, opType string, field Field) (query, variables string) {
 	// Collect variable declarations and argument references
 	var varDecls []string
 	var argRefs []string
@@ -30,24 +30,39 @@ func GenerateQuery(s *Schema, opType, rootTypeName string, field Field) (query, 
 		varsMap[varName] = exampleValue(s, arg.Type, make(map[string]bool))
 	}
 
-	// Build selection set for the return type
+	query = buildOperation(s, opType, field, varDecls, argRefs)
+
+	if len(varsMap) > 0 {
+		b, _ := json.MarshalIndent(varsMap, "", "  ")
+		variables = string(b)
+	}
+
+	return query, variables
+}
+
+// GenerateQueryBare builds a minimal GraphQL query body without an operation
+// wrapper or argument references: just `{ fieldName { ... } }`.
+func GenerateQueryBare(s *Schema, field Field) string {
+	return buildOperation(s, "", field, nil, nil)
+}
+
+func buildOperation(s *Schema, opType string, field Field, varDecls, argRefs []string) string {
 	visited := make(map[string]bool)
 	selSet := buildSelectionSet(s, field.Type, visited, 0)
 
-	// Assemble the operation
 	var buf strings.Builder
 
-	// Operation name: capitalize field name
-	opName := strings.ToUpper(field.Name[:1]) + field.Name[1:]
+	if opType != "" {
+		opName := strings.ToUpper(field.Name[:1]) + field.Name[1:]
+		buf.WriteString(opType)
+		buf.WriteByte(' ')
+		buf.WriteString(opName)
 
-	buf.WriteString(opType)
-	buf.WriteByte(' ')
-	buf.WriteString(opName)
-
-	if len(varDecls) > 0 {
-		buf.WriteByte('(')
-		buf.WriteString(strings.Join(varDecls, ", "))
-		buf.WriteByte(')')
+		if len(varDecls) > 0 {
+			buf.WriteByte('(')
+			buf.WriteString(strings.Join(varDecls, ", "))
+			buf.WriteByte(')')
+		}
 	}
 
 	buf.WriteString(" { ")
@@ -67,14 +82,7 @@ func GenerateQuery(s *Schema, opType, rootTypeName string, field Field) (query, 
 
 	buf.WriteString(" }")
 
-	query = format.GraphQL(buf.String())
-
-	if len(varsMap) > 0 {
-		b, _ := json.MarshalIndent(varsMap, "", "  ")
-		variables = string(b)
-	}
-
-	return query, variables
+	return format.GraphQL(buf.String())
 }
 
 // buildSelectionSet recursively expands fields for a type reference.
