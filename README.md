@@ -22,13 +22,6 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 ## Demos
 
 <details>
-<summary>Overview</summary>
-
-![Overview demo](docs/demos/overview.gif)
-
-</details>
-
-<details>
 <summary>Query generation from schema</summary>
 
 ![Generate query demo](docs/demos/generate-query.gif)
