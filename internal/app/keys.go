@@ -22,6 +22,7 @@ type keyMap struct {
 	OpenEditor    key.Binding
 	ToggleSearch  key.Binding
 	Prettify      key.Binding
+	Copy          key.Binding
 }
 
 var keys = keyMap{
@@ -92,5 +93,9 @@ var keys = keyMap{
 	Prettify: key.NewBinding(
 		key.WithKeys("ctrl+p"),
 		key.WithHelp("ctrl+p", "prettify"),
+	),
+	Copy: key.NewBinding(
+		key.WithKeys("ctrl+y"),
+		key.WithHelp("^y", "copy"),
 	),
 }

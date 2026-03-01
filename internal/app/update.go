@@ -170,6 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runLint()
 		}
 		return m, nil
+
 	}
 
 	// Route to overlay when open (for paste messages, etc.)
@@ -229,6 +230,23 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, keys.Execute):
 		return m.executeQuery()
+
+	case key.Matches(msg, keys.Copy):
+		var content string
+		switch m.focus {
+		case PanelEndpoint:
+			content = m.endpoint.Value()
+		case PanelEditor:
+			content = m.editor.Value()
+		case PanelVariables:
+			content = m.variables.Value()
+		case PanelResults:
+			content = m.results.Content()
+		}
+		if content == "" {
+			return *m, nil
+		}
+		return *m, tea.Batch(tea.SetClipboard(content), m.setTimedInfo("Copied to clipboard"))
 
 	// Enter to start editing in query/variables panels
 	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():
@@ -371,6 +389,16 @@ func (m *Model) isEditing() bool {
 // setTimedError shows an error in the status bar that auto-clears after 3 seconds.
 func (m *Model) setTimedError(msg string) tea.Cmd {
 	m.statusbar.SetError(msg)
+	m.statusClearGen++
+	gen := m.statusClearGen
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return statusClearMsg{gen: gen}
+	})
+}
+
+// setTimedInfo shows an info message in the status bar that auto-clears after 3 seconds.
+func (m *Model) setTimedInfo(msg string) tea.Cmd {
+	m.statusbar.SetInfo(msg)
 	m.statusClearGen++
 	gen := m.statusClearGen
 	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
@@ -709,3 +737,4 @@ func (m *Model) openExternalEditor() (Model, tea.Cmd) {
 		return EditorFinishedMsg{Content: string(data), Panel: panel}
 	})
 }
+

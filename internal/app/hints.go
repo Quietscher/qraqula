@@ -6,6 +6,7 @@ var editorHints = []statusbar.Hint{
 	{Key: "↵", Label: "edit"},
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "^p", Label: "prettify"},
+	{Key: "^y", Label: "copy"},
 	{Key: "tab", Label: "next"},
 	{Key: "^o", Label: "$EDITOR"},
 	{Key: "^e", Label: "env"},
@@ -18,6 +19,7 @@ var variablesHints = []statusbar.Hint{
 	{Key: "↵", Label: "edit"},
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "^p", Label: "prettify"},
+	{Key: "^y", Label: "copy"},
 	{Key: "tab", Label: "next"},
 	{Key: "^o", Label: "$EDITOR"},
 	{Key: "^d", Label: "docs"},
@@ -38,6 +40,7 @@ var resultsHints = []statusbar.Hint{
 	{Key: "↵", Label: "execute"},
 	{Key: "tab", Label: "next"},
 	{Key: "/", Label: "search"},
+	{Key: "^y", Label: "copy"},
 	{Key: "^d", Label: "docs"},
 	{Key: "j/k", Label: "scroll"},
 	{Key: "^c", Label: "abort"},
@@ -56,6 +59,7 @@ var schemaBrowserHints = []statusbar.Hint{
 
 var endpointHints = []statusbar.Hint{
 	{Key: "tab", Label: "next"},
+	{Key: "^y", Label: "copy"},
 	{Key: "^e", Label: "env"},
 	{Key: "^n", Label: "cycle env"},
 	{Key: "^r", Label: "schema"},

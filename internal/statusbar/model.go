@@ -51,6 +51,10 @@ func (m *Model) SetError(msg string) {
 	m.text = errStyle.Render("Error: " + msg)
 }
 
+func (m *Model) SetInfo(msg string) {
+	m.text = okStyle.Render(msg)
+}
+
 func (m *Model) SetLoading() {
 	m.text = barStyle.Render("Executing query...")
 }

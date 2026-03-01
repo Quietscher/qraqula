@@ -86,6 +86,9 @@ func (m *Model) SetSize(w, h int) {
 func (m *Model) Focus() {}
 func (m *Model) Blur()  {}
 
+// Content returns the raw (uncolored) result content.
+func (m Model) Content() string { return m.rawContent }
+
 // Search accessors
 
 func (m Model) Searching() bool   { return m.searching }
