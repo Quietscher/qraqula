@@ -738,17 +738,10 @@ func (m Model) renderTreeOverlay(w, h int) string {
 	treeInnerW := treeOuterW - 4
 	treeInnerH := topH - 2
 
-	// Render preview pane — render raw content directly for reliable updates,
-	// use viewport only when preview pane is focused (for scrolling)
-	var previewRendered string
-	if m.pane == panePreview {
-		m.preview.SetWidth(previewInnerW)
-		m.preview.SetHeight(previewInnerH)
-		previewRendered = m.preview.View()
-	} else {
-		previewRendered = m.previewContent
-	}
-	previewRendered = padToHeight(previewRendered, previewInnerH)
+	// Render preview pane — always use viewport for proper height clipping
+	m.preview.SetWidth(previewInnerW)
+	m.preview.SetHeight(previewInnerH)
+	previewRendered := padToHeight(m.preview.View(), previewInnerH)
 	previewBox := m.paneBorderStyle(panePreview, previewOuterW-2, topH-2).Render(previewRendered)
 
 	// Render tree pane (already has scroll via scrollWindow)

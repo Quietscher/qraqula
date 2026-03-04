@@ -55,6 +55,9 @@ type Model struct {
 	width        int
 	height       int
 
+	// When true, auto-open builder after schema fetch completes
+	pendingBuilderOpen bool
+
 	// Timer generation counters for debouncing
 	statusClearGen int
 	lintGen        int

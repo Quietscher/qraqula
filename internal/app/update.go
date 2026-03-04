@@ -91,6 +91,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browser.SetSchema(msg.Schema)
 		m.schemaAST = validate.LoadSchema(msg.Schema)
 		m.statusbar.SetSchemaLoaded(len(msg.Schema.Types))
+		// Auto-open builder if Enter was pressed before schema was loaded
+		if m.pendingBuilderOpen {
+			m.pendingBuilderOpen = false
+			m.builder.SetSize(m.width, m.height)
+			query := strings.TrimSpace(m.editor.Value())
+			if query != "" {
+				m.builder.OpenWithQuery(msg.Schema, query)
+			} else {
+				m.builder.OpenBlank(msg.Schema)
+			}
+			return m, nil
+		}
 		// Validate current query against the new schema
 		var cmd tea.Cmd
 		if q := m.editor.Value(); q != "" {
@@ -101,6 +113,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case SchemaFetchErrorMsg:
+		m.pendingBuilderOpen = false
 		return m, m.setTimedError("Schema fetch failed: " + msg.Err.Error())
 
 	case schema.GenerateQueryMsg:
@@ -320,7 +333,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.statusbar.SetHints(editingHints)
 		return *m, cmd
 
-	// Enter on query editor: open builder if schema loaded, else start editing
+	// Enter on query editor: open builder if schema loaded, else fetch schema first
 	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():
 		if m.browser.Schema() != nil {
 			m.builder.SetSize(m.width, m.height)
@@ -332,8 +345,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			}
 			return *m, nil
 		}
-		cmd := m.editor.StartEditing()
-		m.statusbar.SetHints(editingHints)
+		// No schema yet — fetch it and open builder when it arrives
+		m.pendingBuilderOpen = true
+		_, cmd := m.fetchSchema()
 		return *m, cmd
 	case msg.String() == "enter" && m.focus == PanelVariables && !m.variables.Editing():
 		cmd := m.variables.StartEditing()
