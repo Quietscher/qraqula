@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/qraqula/qla/internal/highlight"
 	"github.com/qraqula/qla/internal/schema"
 	"github.com/qraqula/qla/internal/statusbar"
@@ -734,21 +735,21 @@ func (m Model) renderTreeOverlay(w, h int) string {
 	treeInnerW := treeOuterW - 4
 	treeInnerH := topH - 2
 
-	// Render preview pane — always use viewport for proper height clipping
+	// Render preview pane — clip to exact dimensions to prevent lipgloss wrapping
 	m.preview.SetWidth(previewInnerW)
 	m.preview.SetHeight(previewInnerH)
-	previewRendered := padToHeight(m.preview.View(), previewInnerH)
+	previewRendered := clipContent(m.preview.View(), previewInnerW, previewInnerH)
 	previewBox := m.paneBorderStyle(panePreview, previewOuterW-2, topH-2).Render(previewRendered)
 
-	// Render tree pane (already has scroll via scrollWindow)
-	treeContent := padToHeight(m.renderFieldTree(treeInnerW, treeInnerH), treeInnerH)
+	// Render tree pane — clip to exact dimensions
+	treeContent := clipContent(m.renderFieldTree(treeInnerW, treeInnerH), treeInnerW, treeInnerH)
 	treeBox := m.paneBorderStyle(paneTree, treeOuterW-2, topH-2).Render(treeContent)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewBox, treeBox)
 
-	// Render args pane (always shown for stable layout)
+	// Render args pane (always shown for stable layout) — clip to 1 line
 	argsInnerW := w - 4 // -2 border -2 padding
-	argsContent := m.renderArgsHorizontal(argsInnerW)
+	argsContent := ansi.Truncate(m.renderArgsHorizontal(argsInnerW), argsInnerW, "")
 	argsBox := m.paneBorderStyle(paneArgs, w-2, argsOuterH-2).Render(argsContent)
 
 	// Render statusbar
@@ -1138,6 +1139,22 @@ func scrollWindow(cursor, total, height int) (start, end int) {
 
 func isRequired(ref schema.TypeRef) bool {
 	return ref.Kind == "NON_NULL"
+}
+
+// clipContent ensures content has exactly h lines and each line fits within w visible chars.
+// This prevents lipgloss from wrapping lines and expanding the box height.
+func clipContent(content string, w, h int) string {
+	lines := strings.Split(content, "\n")
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, w, "")
+	}
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // padToHeight ensures content has exactly h lines (pads or truncates).
