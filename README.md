@@ -14,6 +14,7 @@ Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 - **Variables panel** with JSON syntax highlighting and validation
 - **External editor** — open query or variables in `$EDITOR` with `Ctrl+O`
 - **Schema-aware linting** — validates queries against the schema before execution
+- **Query builder** — visual field tree overlay with toggleable selection, argument support, and field search/filter
 - **Query history** — auto-saved on execution, organized in folders with timestamps, scrollable sidebar with delete confirmation
 - **Query abort** — cancel running queries instantly with `Ctrl+C`
 - **Environments & headers** — named environments (dev/staging/prod) with endpoint, headers, and variables; global headers; cycle between envs
@@ -88,6 +89,21 @@ Set your GraphQL endpoint URL in the top bar, write a query in the editor, and p
 | `v` | View field arguments |
 | `/` | Search (cross-level, includes variable types) |
 | `Esc` | Clear search |
+
+### Query Builder
+
+| Key | Action |
+|---|---|
+| `Enter` | Open builder (from editor or schema browser) |
+| `j` / `k` | Navigate fields |
+| `Space` | Toggle field selection |
+| `S` | Toggle all children |
+| `l` / `Enter` | Expand field |
+| `h` | Collapse / go to parent |
+| `/` | Filter fields by name |
+| `Esc` | Clear filter (or close builder) |
+| `Tab` | Cycle panes (preview, tree, args) |
+| `Alt+Enter` | Apply query |
 
 ### History Sidebar
 
