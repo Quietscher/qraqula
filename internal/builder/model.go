@@ -721,11 +721,7 @@ func (m Model) renderTreeOverlay(w, h int) string {
 	//   Bottom row: args (full width, horizontal) — only if args exist, fixed 3 lines
 	//   Status bar (1 line)
 	statusH := 1
-	argsOuterH := 0
-	hasArgs := len(m.argNodes) > 0
-	if hasArgs {
-		argsOuterH = 3 // border(2) + 1 content line (horizontal args)
-	}
+	argsOuterH := 3 // border(2) + 1 content line — always reserved for stable layout
 
 	topH := h - statusH - argsOuterH
 
@@ -750,22 +746,16 @@ func (m Model) renderTreeOverlay(w, h int) string {
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewBox, treeBox)
 
-	// Render args pane (horizontal layout, if args exist)
-	var argsBox string
-	if hasArgs {
-		argsInnerW := w - 4 // -2 border -2 padding
-		argsContent := m.renderArgsHorizontal(argsInnerW)
-		argsBox = m.paneBorderStyle(paneArgs, w-2, argsOuterH-2).Render(argsContent)
-	}
+	// Render args pane (always shown for stable layout)
+	argsInnerW := w - 4 // -2 border -2 padding
+	argsContent := m.renderArgsHorizontal(argsInnerW)
+	argsBox := m.paneBorderStyle(paneArgs, w-2, argsOuterH-2).Render(argsContent)
 
 	// Render statusbar
 	m.statusbar.SetWidth(w)
 	status := lipgloss.NewStyle().Width(w).Foreground(lipgloss.Color("245")).Render(m.statusbar.View())
 
-	if hasArgs {
-		return lipgloss.JoinVertical(lipgloss.Left, topRow, argsBox, status)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, topRow, status)
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, argsBox, status)
 }
 
 // paneBorderStyle returns the border style for a pane, focused or blurred.
@@ -895,7 +885,12 @@ func (m Model) renderArgsHorizontal(w int) string {
 		return strings.Join(parts, sep)
 	}
 
-	// Need horizontal scrolling — find window around cursor
+	// Need horizontal scrolling — reserve space for scroll indicators (2 chars each)
+	scrollW := w - 4 // room for "◀ " and " ▶"
+	if scrollW < 1 {
+		scrollW = 1
+	}
+
 	// Calculate the start position and width of cursor segment
 	cursorStart := 0
 	for i := 0; i < m.argCursor && i < len(segments); i++ {
@@ -907,7 +902,7 @@ func (m Model) renderArgsHorizontal(w int) string {
 	if m.argCursor < len(segments) {
 		cursorW = segments[m.argCursor].w
 	}
-	scrollStart := cursorStart - (w-cursorW)/2
+	scrollStart := cursorStart - (scrollW-cursorW)/2
 	if scrollStart < 0 {
 		scrollStart = 0
 	}
@@ -921,7 +916,7 @@ func (m Model) renderArgsHorizontal(w int) string {
 			segEnd += sepW
 		}
 
-		if pos >= scrollStart+w {
+		if pos >= scrollStart+scrollW {
 			break
 		}
 		if segEnd > scrollStart {
@@ -938,8 +933,7 @@ func (m Model) renderArgsHorizontal(w int) string {
 	if scrollStart > 0 {
 		line = dimStyle.Render("◀ ") + line
 	}
-	if scrollStart+w < totalW {
-		// Trim to fit and add indicator
+	if scrollStart+scrollW < totalW {
 		line = line + dimStyle.Render(" ▶")
 	}
 
