@@ -869,16 +869,16 @@ func TestSectionHeightsProportional(t *testing.T) {
 		t.Fatalf("expected 2 recent items, got %d", len(sb.recentItems))
 	}
 
-	// height=20, sep=1, available=19
-	// 50/50 would give folders=9, recent=10
-	// recent only needs 2, so extra 8 goes to folders
+	// height=20, h=19 (-1 reserve), sep=1, available=18
+	// fCount=6, rCount=2, total=8 ≤ 18 (everything fits)
+	// recent capped at 2, extra 10 goes to folders → 16
 	sb.SetSize(40, 20)
 	fH, rH := sb.sectionHeights()
 	if rH != 2 {
 		t.Errorf("expected recent height capped at item count 2, got %d", rH)
 	}
-	if fH != 17 {
-		t.Errorf("expected folders height 17 (19-2), got %d", fH)
+	if fH != 16 {
+		t.Errorf("expected folders height 16 (18-2), got %d", fH)
 	}
 }
 
@@ -902,13 +902,13 @@ func TestSectionHeightsFewFolderItems(t *testing.T) {
 	sb.SetSize(40, 20)
 	fH, rH := sb.sectionHeights()
 
-	// folders only has 1 item, should get 1 line
-	if fH != 1 {
-		t.Errorf("expected folders height 1 (capped at item count), got %d", fH)
+	// h=19 (-1 reserve), available=18, minFolders=18/3=6
+	// folders has 1 item but minimum is 6, recent gets 18-6=12
+	if fH != 6 {
+		t.Errorf("expected folders height 6 (min 33%%), got %d", fH)
 	}
-	// recent gets the rest: 19-1=18
-	if rH != 18 {
-		t.Errorf("expected recent height 18, got %d", rH)
+	if rH != 12 {
+		t.Errorf("expected recent height 12, got %d", rH)
 	}
 }
 
@@ -928,12 +928,10 @@ func TestSectionHeightsSmallWindow(t *testing.T) {
 	sb.SetSize(40, 5)
 	fH, rH := sb.sectionHeights()
 
-	// height=5, sep=1, available=4
-	// 50/50: folders=2, recent=2
-	// folders has 2 items → keeps 2
-	// recent has 1 item → caps at 1, gives extra to folders
-	if fH != 3 {
-		t.Errorf("expected folders height 3, got %d", fH)
+	// height=5, h=4 (-1 reserve), sep=1, available=3
+	// fCount=2, rCount=1, total=3 ≤ 3 (everything fits, no extra)
+	if fH != 2 {
+		t.Errorf("expected folders height 2, got %d", fH)
 	}
 	if rH != 1 {
 		t.Errorf("expected recent height 1, got %d", rH)

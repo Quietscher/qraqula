@@ -278,7 +278,10 @@ func (sb *Sidebar) findEntry(id string) *Entry {
 // --- Section height calculation ---
 
 func (sb Sidebar) sectionHeights() (foldersH, recentH int) {
-	h := sb.height
+	// Reserve 1 line: lipgloss Height() pads short content but does not
+	// truncate overflow, so an extra line makes the panel border taller
+	// than sibling panels. The -1 keeps the sidebar within its budget.
+	h := sb.height - 1
 	if sb.confirming {
 		h -= 2
 	}
@@ -304,6 +307,10 @@ func (sb Sidebar) sectionHeights() (foldersH, recentH int) {
 
 		fCount := len(sb.folderItems)
 		rCount := len(sb.recentItems)
+		minFolders := available / 3 // folders section gets at least 33%
+		if minFolders < 1 {
+			minFolders = 1
+		}
 
 		if fCount+rCount <= available {
 			// Everything fits — give each section its item count
@@ -326,6 +333,15 @@ func (sb Sidebar) sectionHeights() (foldersH, recentH int) {
 			if recentH < 1 {
 				recentH = 1
 				foldersH = available - 1
+			}
+		}
+
+		// Enforce minimum folders height
+		if foldersH < minFolders {
+			foldersH = minFolders
+			recentH = available - foldersH
+			if recentH < 1 {
+				recentH = 1
 			}
 		}
 		return
@@ -1015,6 +1031,11 @@ func (sb Sidebar) renderSection(items []sidebarItem, cursor, scroll, height int,
 		}
 		styled := hDimStyle.Render(indicator)
 		lines = append(lines, lipgloss.NewStyle().Width(width).MaxWidth(width).Align(lipgloss.Center).Render(styled))
+	}
+
+	// Pad to allocated height so the section occupies its full space
+	for len(lines) < height {
+		lines = append(lines, "")
 	}
 
 	return strings.Join(lines, "\n")
