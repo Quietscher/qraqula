@@ -14,6 +14,13 @@ type GenerateQueryMsg struct {
 	Variables string
 }
 
+// OpenBuilderMsg is sent when Enter is pressed on a root-type field
+// in the schema browser, to open the query builder overlay.
+type OpenBuilderMsg struct {
+	OpType string
+	Field  Field
+}
+
 // GenerateQuery builds a complete GraphQL operation string with variable
 // declarations and example variable values. opType is "query", "mutation",
 // or "subscription".
@@ -27,7 +34,7 @@ func GenerateQuery(s *Schema, opType string, field Field) (query, variables stri
 		varName := arg.Name
 		varDecls = append(varDecls, "$"+varName+": "+arg.Type.DisplayName())
 		argRefs = append(argRefs, arg.Name+": $"+varName)
-		varsMap[varName] = exampleValue(s, arg.Type, make(map[string]bool))
+		varsMap[varName] = ExampleValue(s, arg.Type, make(map[string]bool))
 	}
 
 	query = buildOperation(s, opType, field, varDecls, argRefs)
@@ -177,19 +184,19 @@ func isLeaf(s *Schema, name string) bool {
 	return t.Kind == "SCALAR" || t.Kind == "ENUM"
 }
 
-// exampleValue generates a plausible example value for a type reference,
+// ExampleValue generates a plausible example value for a type reference,
 // suitable for use in a variables JSON object.
-func exampleValue(s *Schema, ref TypeRef, visited map[string]bool) any {
+func ExampleValue(s *Schema, ref TypeRef, visited map[string]bool) any {
 	switch ref.Kind {
 	case "NON_NULL":
 		if ref.OfType != nil {
-			return exampleValue(s, *ref.OfType, visited)
+			return ExampleValue(s, *ref.OfType, visited)
 		}
 		return nil
 
 	case "LIST":
 		if ref.OfType != nil {
-			return []any{exampleValue(s, *ref.OfType, visited)}
+			return []any{ExampleValue(s, *ref.OfType, visited)}
 		}
 		return []any{}
 	}
@@ -239,7 +246,7 @@ func exampleValue(s *Schema, ref TypeRef, visited map[string]bool) any {
 		visited[name] = true
 		obj := make(map[string]any, len(t.InputFields))
 		for _, f := range t.InputFields {
-			obj[f.Name] = exampleValue(s, f.Type, visited)
+			obj[f.Name] = ExampleValue(s, f.Type, visited)
 		}
 		return obj
 	}

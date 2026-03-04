@@ -302,9 +302,9 @@ func TestBrowserDeprecatedField(t *testing.T) {
 	b.SetSchema(testSchema())
 	b.SetSize(80, 30)
 
-	// Drill into Query, then into User
+	// Drill into Query, then into User (use "l" to drill in since "enter" opens builder)
 	b = updateBrowser(b, keyPress("enter")) // into Query
-	b = updateBrowser(b, keyPress("enter")) // cursor=0 → first item
+	b = updateBrowser(b, keyPress("l"))     // cursor=0 → drill into first item
 
 	view := stripANSI(b.View())
 	if !strings.Contains(view, "oldName") {
@@ -381,7 +381,7 @@ func TestBrowserDeepNavigation(t *testing.T) {
 	// In Query: first item (index 0) should be either "implements Node" or "user(id: ID!): User"
 	// Actually, Query is an OBJECT with fields, and it has no interfaces listed in testSchema.
 	// So items[0] = user(id: ID!): User, items[1] = users: [User]!
-	b = updateBrowser(b, keyPress("enter")) // drill into User (via user field)
+	b = updateBrowser(b, keyPress("l")) // drill into User (via user field, "l" drills in)
 
 	view := stripANSI(b.View())
 	if !strings.Contains(view, "User") {

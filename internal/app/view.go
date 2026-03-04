@@ -82,6 +82,9 @@ func (m Model) renderView() string {
 	status := statusStyle.Width(m.width).Render(m.statusbar.View())
 
 	base := lipgloss.JoinVertical(lipgloss.Left, ep, content, status)
+	if m.builder.IsOpen() {
+		return m.builder.RenderOver(base)
+	}
 	if m.overlay.IsOpen() {
 		return m.overlay.RenderOver(base)
 	}

@@ -3,7 +3,8 @@ package app
 import "github.com/qraqula/qla/internal/statusbar"
 
 var editorHints = []statusbar.Hint{
-	{Key: "↵", Label: "edit"},
+	{Key: "i", Label: "edit"},
+	{Key: "↵", Label: "build query"},
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "^p", Label: "prettify"},
 	{Key: "^y", Label: "copy"},
@@ -17,7 +18,7 @@ var editorHints = []statusbar.Hint{
 }
 
 var variablesHints = []statusbar.Hint{
-	{Key: "↵", Label: "edit"},
+	{Key: "i/↵", Label: "edit"},
 	{Key: "alt+↵", Label: "execute"},
 	{Key: "^p", Label: "prettify"},
 	{Key: "^y", Label: "copy"},
@@ -52,7 +53,8 @@ var resultsHints = []statusbar.Hint{
 
 var schemaBrowserHints = []statusbar.Hint{
 	{Key: "j/k/↑↓", Label: "navigate"},
-	{Key: "l/↵", Label: "drill in"},
+	{Key: "↵", Label: "build"},
+	{Key: "l", Label: "drill in"},
 	{Key: "h/⌫", Label: "back"},
 	{Key: "g/G", Label: "generate"},
 	{Key: "v", Label: "view args"},

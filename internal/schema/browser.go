@@ -183,7 +183,18 @@ func (b Browser) Update(msg tea.Msg) (Browser, tea.Cmd) {
 			if b.pushArgsPage() {
 				return b, nil
 			}
-		case "l", "enter", "right":
+		case "enter":
+			// On root type field page, Enter opens the builder
+			if field, opType := b.selectedField(); field != nil {
+				f := *field
+				op := opType
+				return b, func() tea.Msg { return OpenBuilderMsg{OpType: op, Field: f} }
+			}
+			// Otherwise drill in as usual
+			if b.drillIn() {
+				return b, nil
+			}
+		case "l", "right":
 			if b.drillIn() {
 				return b, nil
 			}
@@ -501,6 +512,13 @@ func (b *Browser) pushArgsPage() bool {
 	b.syncList()
 	b.list.Select(0)
 	return true
+}
+
+// SelectedRootField returns the currently selected root-type field and its
+// operation type ("query"/"mutation"/"subscription"). Returns (nil, "") if
+// not on a root type field page (stack depth 2).
+func (b *Browser) SelectedRootField() (field *Field, opType string) {
+	return b.selectedField()
 }
 
 // selectedField resolves the currently selected browser item to a root-type

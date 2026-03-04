@@ -11,6 +11,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/qraqula/qla/internal/builder"
 	"github.com/qraqula/qla/internal/format"
 	"github.com/qraqula/qla/internal/graphql"
 	"github.com/qraqula/qla/internal/history"
@@ -27,6 +28,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.layoutPanels()
+		m.builder.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -108,6 +110,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setFocus(PanelEditor)
 		return m, m.setTimedInfo("Query generated from schema")
 
+	case schema.OpenBuilderMsg:
+		if m.browser.Schema() != nil {
+			m.builder.SetSize(m.width, m.height)
+			m.builder.OpenFromSchemaField(m.browser.Schema(), msg.OpType, msg.Field)
+		}
+		return m, nil
+
+	case builder.CloseMsg:
+		m.builder.Close()
+		return m, nil
+
+
+	case builder.ApplyMsg:
+		m.builder.Close()
+		m.editor.SetValue(msg.Query)
+		m.variables.SetValue(msg.Variables)
+		m.rightPanelMode = modeResults
+		m.setFocus(PanelEditor)
+		return m, m.setTimedInfo("Query built from schema")
+
 	case history.LoadEntryMsg:
 		m.editor.SetValue(msg.Entry.Query)
 		m.variables.SetValue(msg.Entry.Variables)
@@ -181,6 +203,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
+	// Route to builder when open
+	if m.builder.IsOpen() {
+		var cmd tea.Cmd
+		m.builder, cmd = m.builder.Update(msg)
+		return m, cmd
+	}
+
 	// Route to overlay when open (for paste messages, etc.)
 	if m.overlay.IsOpen() {
 		var cmd tea.Cmd
@@ -208,6 +237,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	if m.overlay.IsOpen() {
 		var cmd tea.Cmd
 		m.overlay, cmd = m.overlay.Update(msg)
+		return *m, cmd
+	}
+
+	// When builder is open, handle quit keys at app level, route rest to builder
+	if m.builder.IsOpen() {
+		if key.Matches(msg, keys.Quit) || key.Matches(msg, keys.Abort) {
+			m.saveSession()
+			return *m, tea.Quit
+		}
+		var cmd tea.Cmd
+		m.builder, cmd = m.builder.Update(msg)
 		return *m, cmd
 	}
 
@@ -270,8 +310,28 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 		return *m, m.setTimedInfo("Saved to ~/Downloads/" + filename)
 
-	// Enter to start editing in query/variables panels
+	// Quick edit: i key starts editing the focused editor/variables panel
+	case msg.String() == "i" && m.focus == PanelEditor && !m.editor.Editing():
+		cmd := m.editor.StartEditing()
+		m.statusbar.SetHints(editingHints)
+		return *m, cmd
+	case msg.String() == "i" && m.focus == PanelVariables && !m.variables.Editing():
+		cmd := m.variables.StartEditing()
+		m.statusbar.SetHints(editingHints)
+		return *m, cmd
+
+	// Enter on query editor: open builder if schema loaded, else start editing
 	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():
+		if m.browser.Schema() != nil {
+			m.builder.SetSize(m.width, m.height)
+			query := strings.TrimSpace(m.editor.Value())
+			if query != "" {
+				m.builder.OpenWithQuery(m.browser.Schema(), query)
+			} else {
+				m.builder.OpenBlank(m.browser.Schema())
+			}
+			return *m, nil
+		}
 		cmd := m.editor.StartEditing()
 		m.statusbar.SetHints(editingHints)
 		return *m, cmd

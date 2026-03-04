@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/qraqula/qla/internal/builder"
 	"github.com/qraqula/qla/internal/config"
 	"github.com/qraqula/qla/internal/editor"
 	"github.com/qraqula/qla/internal/endpoint"
@@ -43,6 +44,7 @@ type Model struct {
 
 	configStore *config.Store
 	overlay     overlay.Model
+	builder     builder.Model
 
 	cancelQuery    context.CancelFunc
 	rightPanelMode rightPanelMode
@@ -128,6 +130,7 @@ func NewModel() Model {
 		sidebarOpen: sidebarOpen,
 		configStore: cfgStore,
 		overlay:     overlay.New(),
+		builder:     builder.New(),
 		focus:       PanelEditor,
 	}
 }
@@ -160,6 +163,7 @@ func NewModelWithStores(histStore *history.Store, cfgStore *config.Store) Model 
 		sidebarOpen: histStore.Meta.SidebarOpen,
 		configStore: cfgStore,
 		overlay:     overlay.New(),
+		builder:     builder.New(),
 		focus:       PanelEditor,
 	}
 }
