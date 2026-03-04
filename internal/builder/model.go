@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -58,7 +59,11 @@ type Model struct {
 	root    *TreeNode
 	opField string     // name of the root operation field
 	flat    []FlatNode // visible flattened nodes
-	cursor  int        // cursor position in flat list
+	cursor  int        // cursor position in flat list (indexes into visibleFlat())
+
+	// Filter state for field tree search
+	filtering   bool
+	filterInput textinput.Model
 
 	// Args state
 	argCursor int
@@ -86,9 +91,18 @@ type opItem struct {
 
 // New creates a new builder model (initially not visible).
 func New() Model {
+	fi := textinput.New()
+	fi.Prompt = "/ "
+	fi.CharLimit = 100
+	fiStyles := fi.Styles()
+	fiStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	fiStyles.Cursor.Color = lipgloss.Color("196")
+	fi.SetStyles(fiStyles)
+
 	return Model{
-		preview:   viewport.New(),
-		statusbar: statusbar.New(),
+		preview:     viewport.New(),
+		statusbar:   statusbar.New(),
+		filterInput: fi,
 	}
 }
 
@@ -155,6 +169,9 @@ func (m *Model) Close() {
 	m.visible = false
 	m.root = nil
 	m.flat = nil
+	m.filtering = false
+	m.filterInput.Blur()
+	m.filterInput.SetValue("")
 }
 
 // Update handles messages when the builder is open.
@@ -175,6 +192,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Forward non-key messages to filter input when filtering (e.g. cursor blink)
+	if m.filtering {
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		return m, cmd
+	}
+
 	return m, nil
 }
 
@@ -184,6 +208,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	// Global builder keys
 	switch key {
 	case "esc":
+		if m.filtering {
+			m.clearFilter()
+			m.updateStatusHints()
+			return m, nil
+		}
 		m.Close()
 		return m, func() tea.Msg { return CloseMsg{} }
 	case "alt+enter":
@@ -251,41 +280,56 @@ func (m Model) handleTreeKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.preview, cmd = m.preview.Update(msg)
 		return m, cmd
 	case paneTree:
-		return m.handleTreePaneKey(key)
+		return m.handleTreePaneKey(msg)
 	case paneArgs:
 		return m.handleArgsPaneKey(key)
 	}
 	return m, nil
 }
 
-func (m Model) handleTreePaneKey(key string) (Model, tea.Cmd) {
+func (m Model) handleTreePaneKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	if m.filtering {
+		return m.handleFilterKey(msg)
+	}
+
+	key := msg.String()
 	switch key {
+	case "/":
+		m.filtering = true
+		m.filterInput.SetValue("")
+		m.cursor = 0
+		m.updateStatusHints()
+		return m, m.filterInput.Focus()
 	case "j", "down":
-		if m.cursor < len(m.flat)-1 {
+		vis := m.visibleFlat()
+		if m.cursor < len(vis)-1 {
 			m.cursor++
-			m.updateArgsList()
+			m.updateArgsFromVisible()
 		}
 	case "k", "up":
 		if m.cursor > 0 {
 			m.cursor--
-			m.updateArgsList()
+			m.updateArgsFromVisible()
 		}
 	case "space", " ":
-		if m.cursor < len(m.flat) {
-			node := m.flat[m.cursor].Node
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
 			ToggleSelected(node)
 			m.updatePreview()
 		}
 	case "S":
-		if m.cursor < len(m.flat) {
-			node := m.flat[m.cursor].Node
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
 			ToggleChildrenSelected(m.schema, node)
 			m.rebuildFlat()
 			m.updatePreview()
 		}
 	case "l", "enter", "right":
-		if m.cursor < len(m.flat) {
-			node := m.flat[m.cursor].Node
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
 			if !node.IsLeaf {
 				EnsureChildrenReady(m.schema, node)
 				node.Expanded = true
@@ -294,18 +338,20 @@ func (m Model) handleTreePaneKey(key string) (Model, tea.Cmd) {
 			}
 		}
 	case "h", "left":
-		if m.cursor < len(m.flat) {
-			node := m.flat[m.cursor].Node
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
 			if node.Expanded && len(node.Children) > 0 {
 				node.Expanded = false
 				m.rebuildFlat()
 				// Keep cursor valid
-				if m.cursor >= len(m.flat) {
-					m.cursor = len(m.flat) - 1
+				vis = m.visibleFlat()
+				if m.cursor >= len(vis) {
+					m.cursor = max(0, len(vis)-1)
 				}
 			} else if node.Parent != nil && node.Parent != m.root {
 				// Navigate to parent
-				for i, fn := range m.flat {
+				for i, fn := range vis {
 					if fn.Node == node.Parent {
 						m.cursor = i
 						break
@@ -314,16 +360,92 @@ func (m Model) handleTreePaneKey(key string) (Model, tea.Cmd) {
 			}
 		}
 	case "G":
-		// Jump to end
-		if len(m.flat) > 0 {
-			m.cursor = len(m.flat) - 1
-			m.updateArgsList()
+		vis := m.visibleFlat()
+		if len(vis) > 0 {
+			m.cursor = len(vis) - 1
+			m.updateArgsFromVisible()
 		}
 	case "g":
 		m.cursor = 0
-		m.updateArgsList()
+		m.updateArgsFromVisible()
 	}
 	return m, nil
+}
+
+// handleFilterKey handles keys when the tree filter input is active.
+func (m Model) handleFilterKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "j", "down":
+		vis := m.visibleFlat()
+		if m.cursor < len(vis)-1 {
+			m.cursor++
+			m.updateArgsFromVisible()
+		}
+		return m, nil
+	case "k", "up":
+		if m.cursor > 0 {
+			m.cursor--
+			m.updateArgsFromVisible()
+		}
+		return m, nil
+	case "space":
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
+			ToggleSelected(node)
+			m.updatePreview()
+		}
+		return m, nil
+	case "l", "enter":
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
+			if !node.IsLeaf {
+				EnsureChildrenReady(m.schema, node)
+				node.Expanded = true
+				m.rebuildFlat()
+				m.updatePreview()
+				// Clamp cursor to new visible list
+				vis = m.visibleFlat()
+				if m.cursor >= len(vis) {
+					m.cursor = max(0, len(vis)-1)
+				}
+			}
+		}
+		return m, nil
+	case "h":
+		vis := m.visibleFlat()
+		if m.cursor < len(vis) {
+			node := vis[m.cursor].Node
+			if node.Expanded && len(node.Children) > 0 {
+				node.Expanded = false
+				m.rebuildFlat()
+				vis = m.visibleFlat()
+				if m.cursor >= len(vis) {
+					m.cursor = max(0, len(vis)-1)
+				}
+			} else if node.Parent != nil && node.Parent != m.root {
+				for i, fn := range vis {
+					if fn.Node == node.Parent {
+						m.cursor = i
+						break
+					}
+				}
+			}
+		}
+		return m, nil
+	default:
+		// Forward all other keys to the text input
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		// Clamp cursor after filter text changes
+		vis := m.visibleFlat()
+		if m.cursor >= len(vis) {
+			m.cursor = max(0, len(vis)-1)
+		}
+		return m, cmd
+	}
 }
 
 func (m Model) handleArgsPaneKey(key string) (Model, tea.Cmd) {
@@ -376,6 +498,69 @@ func (m *Model) rebuildFlat() {
 		m.cursor = max(0, len(m.flat)-1)
 	}
 	m.updateArgsList()
+}
+
+// visibleFlat returns the flat nodes filtered by the current search query.
+// When not filtering or query is empty, returns the full m.flat.
+func (m *Model) visibleFlat() []FlatNode {
+	if !m.filtering || m.filterInput.Value() == "" {
+		return m.flat
+	}
+	query := strings.ToLower(m.filterInput.Value())
+	var result []FlatNode
+	for _, fn := range m.flat {
+		if strings.Contains(strings.ToLower(fn.Node.Name), query) {
+			result = append(result, fn)
+		}
+	}
+	return result
+}
+
+// clearFilter exits filter mode, restoring the cursor to the currently selected
+// node's position in the full flat list.
+func (m *Model) clearFilter() {
+	if !m.filtering {
+		return
+	}
+	// Find the node at the current filtered cursor position
+	vis := m.visibleFlat()
+	var currentNode *TreeNode
+	if m.cursor < len(vis) {
+		currentNode = vis[m.cursor].Node
+	}
+	m.filtering = false
+	m.filterInput.Blur()
+	m.filterInput.SetValue("")
+	// Restore cursor to the same node in the full flat list
+	if currentNode != nil {
+		for i, fn := range m.flat {
+			if fn.Node == currentNode {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	if m.cursor >= len(m.flat) {
+		m.cursor = max(0, len(m.flat)-1)
+	}
+}
+
+// updateArgsFromVisible updates the args list based on the current cursor in visibleFlat.
+func (m *Model) updateArgsFromVisible() {
+	m.argNodes = nil
+	m.argCursor = 0
+	if m.root != nil && len(m.root.Args) > 0 {
+		m.argNodes = m.root.Args
+		m.argNode = m.root
+	}
+	vis := m.visibleFlat()
+	if m.cursor < len(vis) {
+		node := vis[m.cursor].Node
+		if len(node.Args) > 0 {
+			m.argNodes = node.Args
+			m.argNode = node
+		}
+	}
 }
 
 func (m *Model) updateArgsList() {
@@ -457,16 +642,27 @@ func (m *Model) updateStatusHints() {
 				{Key: "esc", Label: "cancel"},
 			})
 		case paneTree:
-			m.statusbar.SetHints([]statusbar.Hint{
-				{Key: "j/k", Label: "navigate"},
-				{Key: "space", Label: "toggle"},
-				{Key: "S", Label: "children"},
-				{Key: "l/→", Label: "expand"},
-				{Key: "h/←", Label: "collapse"},
-				{Key: "tab", Label: "pane"},
-				{Key: "alt+↵", Label: "apply"},
-				{Key: "esc", Label: "cancel"},
-			})
+			if m.filtering {
+				m.statusbar.SetHints([]statusbar.Hint{
+					{Key: "j/k", Label: "navigate"},
+					{Key: "space", Label: "toggle"},
+					{Key: "l", Label: "expand"},
+					{Key: "h", Label: "collapse"},
+					{Key: "esc", Label: "clear filter"},
+				})
+			} else {
+				m.statusbar.SetHints([]statusbar.Hint{
+					{Key: "j/k", Label: "navigate"},
+					{Key: "space", Label: "toggle"},
+					{Key: "S", Label: "children"},
+					{Key: "l/→", Label: "expand"},
+					{Key: "h/←", Label: "collapse"},
+					{Key: "/", Label: "filter"},
+					{Key: "tab", Label: "pane"},
+					{Key: "alt+↵", Label: "apply"},
+					{Key: "esc", Label: "cancel"},
+				})
+			}
 		case paneArgs:
 			m.statusbar.SetHints([]statusbar.Hint{
 				{Key: "h/l", Label: "navigate"},
@@ -758,12 +954,25 @@ func (m Model) renderArgsHorizontal(w int) string {
 }
 
 func (m Model) renderFieldTree(w, h int) string {
-	if len(m.flat) == 0 {
-		return dimStyle.Render("(no fields)")
+	vis := m.visibleFlat()
+
+	// When filtering, render filter input at the top and reduce available height
+	var filterLine string
+	if m.filtering {
+		filterLine = m.filterInput.View()
+		h-- // reserve one line for the filter input
+	}
+
+	if len(vis) == 0 {
+		empty := dimStyle.Render("(no fields)")
+		if filterLine != "" {
+			return filterLine + "\n" + empty
+		}
+		return empty
 	}
 
 	// Reserve space for scroll indicators so content + indicators fit within h lines
-	total := len(m.flat)
+	total := len(vis)
 	availH := h
 	if total > h {
 		availH = h - 2 // reserve for both top/bottom scroll indicators
@@ -777,7 +986,7 @@ func (m Model) renderFieldTree(w, h int) string {
 
 	var lines []string
 	for i := start; i < end; i++ {
-		fn := m.flat[i]
+		fn := vis[i]
 		node := fn.Node
 
 		// Cursor indicator
@@ -840,12 +1049,16 @@ func (m Model) renderFieldTree(w, h int) string {
 	if start > 0 {
 		lines = append([]string{dimStyle.Render("  " + upArrow + fmt.Sprintf(" %d more", start))}, lines...)
 	}
-	remaining := len(m.flat) - end
+	remaining := len(vis) - end
 	if remaining > 0 {
 		lines = append(lines, dimStyle.Render("  "+downArrow+fmt.Sprintf(" %d more", remaining)))
 	}
 
-	return strings.Join(lines, "\n")
+	result := strings.Join(lines, "\n")
+	if filterLine != "" {
+		return filterLine + "\n" + result
+	}
+	return result
 }
 
 // --- Styles ---
