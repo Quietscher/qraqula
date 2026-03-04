@@ -719,8 +719,11 @@ func (m Model) renderPickerOverlay(w, h int) string {
 func (m Model) renderTreeOverlay(w, h int) string {
 	// Full-screen layout:
 	//   Top row: preview (left) | field tree (right) — same height
-	//   Bottom row: args (full width, horizontal) — only if args exist, fixed 3 lines
+	//   Bottom row: args (full width) — fixed 3 lines outer
 	//   Status bar (1 line)
+	//
+	// Note: lipgloss v2 Width/Height are TOTAL OUTER dimensions (including border + padding).
+	// Text area = Width - 4 (border 2 + padding 2). Content lines = Height - 2 (border 2).
 	statusH := 1
 	argsOuterH := 3 // border(2) + 1 content line — always reserved for stable layout
 
@@ -730,31 +733,34 @@ func (m Model) renderTreeOverlay(w, h int) string {
 	previewOuterW := w * 40 / 100
 	treeOuterW := w - previewOuterW
 
+	// Inner dimensions = text area for content clipping
 	previewInnerW := previewOuterW - 4 // -2 border -2 padding
 	previewInnerH := topH - 2          // -2 border
 	treeInnerW := treeOuterW - 4
 	treeInnerH := topH - 2
 
-	// Render preview pane — clip to exact dimensions to prevent lipgloss wrapping
+	// Render preview pane — clip to exact text area dimensions
 	m.preview.SetWidth(previewInnerW)
 	m.preview.SetHeight(previewInnerH)
 	previewRendered := clipContent(m.preview.View(), previewInnerW, previewInnerH)
-	previewBox := m.paneBorderStyle(panePreview, previewOuterW-2, topH-2).Render(previewRendered)
+	previewBox := m.paneBorderStyle(panePreview, previewOuterW, topH).Render(previewRendered)
 
-	// Render tree pane — clip to exact dimensions
+	// Render tree pane — clip to exact text area dimensions
 	treeContent := clipContent(m.renderFieldTree(treeInnerW, treeInnerH), treeInnerW, treeInnerH)
-	treeBox := m.paneBorderStyle(paneTree, treeOuterW-2, topH-2).Render(treeContent)
+	treeBox := m.paneBorderStyle(paneTree, treeOuterW, topH).Render(treeContent)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewBox, treeBox)
 
-	// Render args pane (always shown for stable layout) — clip to 1 line
+	// Render args pane (always shown for stable layout)
 	argsInnerW := w - 4 // -2 border -2 padding
 	argsContent := ansi.Truncate(m.renderArgsHorizontal(argsInnerW), argsInnerW, "")
-	argsBox := m.paneBorderStyle(paneArgs, w-2, argsOuterH-2).Render(argsContent)
+	argsBox := m.paneBorderStyle(paneArgs, w, argsOuterH).Render(argsContent)
 
-	// Render statusbar
+	// Render statusbar — truncate to 1 line
 	m.statusbar.SetWidth(w)
-	status := lipgloss.NewStyle().Width(w).Foreground(lipgloss.Color("245")).Render(m.statusbar.View())
+	statusView := m.statusbar.View()
+	statusView = ansi.Truncate(statusView, w, "")
+	status := lipgloss.NewStyle().Width(w).Foreground(lipgloss.Color("245")).Render(statusView)
 
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, argsBox, status)
 }
