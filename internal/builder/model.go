@@ -72,6 +72,9 @@ type Model struct {
 	argNode   *TreeNode           // the node whose args are displayed
 	argScroll int                 // horizontal scroll offset for args display
 
+	// Existing variables from the editor (for merging into preview)
+	existingVars string
+
 	// Preview viewport (scrollable)
 	preview        viewport.Model
 	previewContent string // raw preview text for direct rendering
@@ -116,6 +119,12 @@ func (m Model) IsOpen() bool {
 func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+}
+
+// SetExistingVars stores the current variable values so the preview can
+// show merged (preserved) values instead of fresh examples.
+func (m *Model) SetExistingVars(vars string) {
+	m.existingVars = vars
 }
 
 // OpenBlank opens the builder in operation picker mode.
@@ -592,10 +601,11 @@ func (m *Model) updatePreview() {
 	var buf strings.Builder
 	buf.WriteString(highlight.Colorize(query, "graphql"))
 	if vars != "" {
+		merged := MergeVariables(m.existingVars, vars)
 		buf.WriteString("\n\n")
 		buf.WriteString(dimStyle.Render("Variables:"))
 		buf.WriteString("\n")
-		buf.WriteString(highlight.Colorize(vars, "json"))
+		buf.WriteString(highlight.Colorize(merged, "json"))
 	}
 	m.previewContent = buf.String()
 	m.preview.SetContent(m.previewContent)

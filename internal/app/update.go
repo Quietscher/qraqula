@@ -95,6 +95,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pendingBuilderOpen {
 			m.pendingBuilderOpen = false
 			m.builder.SetSize(m.width, m.height)
+			m.builder.SetExistingVars(m.variables.Value())
 			query := strings.TrimSpace(m.editor.Value())
 			if query != "" {
 				m.builder.OpenWithQuery(msg.Schema, query)
@@ -118,7 +119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case schema.GenerateQueryMsg:
 		m.editor.SetValue(msg.Query)
-		m.variables.SetValue(msg.Variables)
+		m.variables.SetValue(builder.MergeVariables(m.variables.Value(), msg.Variables))
 		m.rightPanelMode = modeResults
 		m.setFocus(PanelEditor)
 		return m, m.setTimedInfo("Query generated from schema")
@@ -126,6 +127,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case schema.OpenBuilderMsg:
 		if m.browser.Schema() != nil {
 			m.builder.SetSize(m.width, m.height)
+			m.builder.SetExistingVars(m.variables.Value())
 			m.builder.OpenFromSchemaField(m.browser.Schema(), msg.OpType, msg.Field)
 		}
 		return m, nil
@@ -138,7 +140,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case builder.ApplyMsg:
 		m.builder.Close()
 		m.editor.SetValue(msg.Query)
-		m.variables.SetValue(msg.Variables)
+		m.variables.SetValue(builder.MergeVariables(m.variables.Value(), msg.Variables))
 		m.rightPanelMode = modeResults
 		m.setFocus(PanelEditor)
 		return m, m.setTimedInfo("Query built from schema")
@@ -337,6 +339,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case msg.String() == "enter" && m.focus == PanelEditor && !m.editor.Editing():
 		if m.browser.Schema() != nil {
 			m.builder.SetSize(m.width, m.height)
+			m.builder.SetExistingVars(m.variables.Value())
 			query := strings.TrimSpace(m.editor.Value())
 			if query != "" {
 				m.builder.OpenWithQuery(m.browser.Schema(), query)
