@@ -8,7 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/vektah/gqlparser/v2 v2.5.32
+	github.com/vektah/gqlparser/v2 v2.5.35
 )
 
 require (
